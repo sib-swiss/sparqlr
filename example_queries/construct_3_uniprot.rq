@@ -1,0 +1,138 @@
+# Use-case step 3
+#
+# Retrieve proteins/enzymes involved in metabolic reactions that involve
+# chemicals (original pollutants or similar compounds) retrieved at step 2
+# of the use-case.
+# This is done in a single query that contains 2 parts:
+# * A subquery run on the Read database (via a SERVICE clause), to retrieves
+#   metabolic reactions that involve the chemicals identified at step 2.
+# * A query to the UniProt database to retrieve protein/enzymes associated with
+#   the metabolic reactions returned by Rhea.
+#
+# Note: in UniProt, a "mnemonic" is a short human-readable identifier assigned
+# to a protein entry. It serves as a convenient shorthand for referencing a
+# protein and typically follows the format: <PROTEIN>_<SPECIES>
+# Example: HBB_HUMAN for human hemoglobin. HBB => abbreviation of the
+#          protein name: Hemoglobin subunit beta.
+#
+# Endpoint: https://sparql.uniprot.org/sparql
+
+PREFIX CHEBI: <http://purl.obolibrary.org/obo/CHEBI_>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX up: <http://purl.uniprot.org/core/>
+PREFIX ex: <http://example.org/>
+
+CONSTRUCT
+{
+    ?compound  ex:hasCompoundInCHEBI  ?similar_compound_chebi  .
+
+    ?rhea  #rdfs:subClassOf            rh:Reaction     ;
+           rh:equation                ?equation_rhea  ;
+           rh:accession               ?accession_rhea ;
+           ex:RheaSideContains        ?compound       .
+
+    ?uniprot    up:reviewed          true   ;
+                up:mnemonic          ?mnemo ;
+                up:organism          ?taxid ;
+                ex:activityCatalyzedReaction ?rhea .
+    ex:activityCatalyzedReaction     rdfs:label   "a shortcut for up:annotation/up:catalyticActivity/up:catalyzedReaction" .
+}
+WHERE
+{
+    {
+        SELECT
+            ?compound
+            ?similar_compound_chebi
+            ?uniprot
+            ?mnemo
+            ?rhea
+            ?accession_rhea
+            ?equation_rhea
+        WHERE
+        {
+
+            # Query the RHEA endpoint using the similar compound names returned by the
+            # query of step 2. Chemical compounds are identified by their ChEBI number.
+            SERVICE <https://sparql.rhea-db.org/sparql> {
+
+                SELECT DISTINCT
+                    ?rhea
+                    ?accession_rhea
+                    ?equation_rhea
+                    ?compound
+                    ?similar_compound_chebi
+                WHERE
+                {
+                    # ChEBI values retrieved from IDSM endpoint.
+                    # Example: <http://purl.obolibrary.org/obo/CHEBI_15930>, which can
+                    # be abbreviated CHEBI:15930
+                    VALUES ?similar_compound_chebi {
+                        CHEBI:82100 CHEBI:3015 CHEBI:40036 CHEBI:2564 CHEBI:81950
+                        CHEBI:82256 CHEBI:15930 CHEBI:9330 CHEBI:82059 CHEBI:83790
+                        CHEBI:83789 CHEBI:83791 CHEBI:82083 CHEBI:82227 CHEBI:38067
+                        CHEBI:53747 CHEBI:53748 CHEBI:55364 CHEBI:37178 CHEBI:37179
+                        CHEBI:9501 CHEBI:14597 CHEBI:184808 CHEBI:184957 CHEBI:185221
+                        CHEBI:185174 CHEBI:185432 CHEBI:168874 CHEBI:134860 CHEBI:135135
+                        CHEBI:135130 CHEBI:135036 CHEBI:135247 CHEBI:135465 CHEBI:59130
+                        CHEBI:59129 CHEBI:59653 CHEBI:59655 CHEBI:59651 CHEBI:33410
+                        CHEBI:33409 CHEBI:231507 CHEBI:16005 CHEBI:16223 CHEBI:183640
+                        CHEBI:134092 CHEBI:84070 CHEBI:33104 CHEBI:33105 CHEBI:33108
+                        CHEBI:33107 CHEBI:33110 CHEBI:33109 CHEBI:33132 CHEBI:33131
+                        CHEBI:33106 CHEBI:27131 CHEBI:27563 CHEBI:27130 CHEBI:231974
+                        CHEBI:232329 CHEBI:17826 CHEBI:64448 CHEBI:64447 CHEBI:64449
+                        CHEBI:64451 CHEBI:64660 CHEBI:62629 CHEBI:28506 CHEBI:29242
+                        CHEBI:29125 CHEBI:29243 CHEBI:29678 CHEBI:29752 CHEBI:29753
+                        CHEBI:29754 CHEBI:29755 CHEBI:29757 CHEBI:29760 CHEBI:29759
+                        CHEBI:29764 CHEBI:29763 CHEBI:29765 CHEBI:29766 CHEBI:230792
+                        CHEBI:18231 CHEBI:22634 CHEBI:23808 CHEBI:174031 CHEBI:91256
+                        CHEBI:91257 CHEBI:81880 CHEBI:81881 CHEBI:82182 CHEBI:82392
+                        CHEBI:62956 CHEBI:63474 CHEBI:63952 CHEBI:48440 CHEBI:48597
+                        CHEBI:48600 CHEBI:48765 CHEBI:49900 CHEBI:50019 CHEBI:50022
+                        CHEBI:50023 CHEBI:50024 CHEBI:49477 CHEBI:50016 CHEBI:29845
+                        CHEBI:29848 CHEBI:29847 CHEBI:29852 CHEBI:29850 CHEBI:29840
+                        CHEBI:29841 CHEBI:29844 CHEBI:29843 CHEBI:29842 CHEBI:29846
+                        CHEBI:29866 CHEBI:29851 CHEBI:29849 CHEBI:30273 CHEBI:30272
+                        CHEBI:30275 CHEBI:30274 CHEBI:30276 CHEBI:30287 CHEBI:30277
+                        CHEBI:30530 CHEBI:30628 CHEBI:30621 CHEBI:30668 CHEBI:1018
+                        CHEBI:50953 CHEBI:50958 CHEBI:50952 CHEBI:50951 CHEBI:51755
+                        CHEBI:47217 CHEBI:220158 CHEBI:187398 CHEBI:75253 CHEBI:52107
+                        CHEBI:52108 CHEBI:52301 CHEBI:52300 CHEBI:9016 CHEBI:185625
+                        CHEBI:185650 CHEBI:185707 CHEBI:185754 CHEBI:185761 CHEBI:186149
+                        CHEBI:186277 CHEBI:186334 CHEBI:169630 CHEBI:135969 CHEBI:136035
+                        CHEBI:77719 CHEBI:35828 CHEBI:35829 CHEBI:35839 CHEBI:35844
+                        CHEBI:35836 CHEBI:35830 CHEBI:35835 CHEBI:35834 CHEBI:35869
+                        CHEBI:35870 CHEBI:35872 CHEBI:35867 CHEBI:35817 CHEBI:36048
+                        CHEBI:36049 CHEBI:6729 CHEBI:186889 CHEBI:176523 CHEBI:176584
+                        CHEBI:176619 CHEBI:176620 CHEBI:176621 CHEBI:94295 CHEBI:94806
+                        CHEBI:75861 CHEBI:53554 CHEBI:53699 CHEBI:53697 CHEBI:53741
+                    }
+
+                    # The ChEBI can be used either as a small molecule, the reactive
+                    # part of a macromolecule, or as a polymer.
+                    ?compound ( rh:chebi |
+                            (rh:reactivePart/rh:chebi) |
+                            (rh:underlyingChebi/rh:chebi) ) ?similar_compound_chebi .
+
+                    ?rhea rdfs:subClassOf                 rh:Reaction     ;
+                        rh:equation                     ?equation_rhea  ;
+                        rh:accession                    ?accession_rhea ;
+                        rh:side/rh:contains/rh:compound ?compound       .
+                }
+            }
+            # Somehow, this BIND is necessary for the query to run.
+            BIND (?rhea AS ?rhea_id)
+
+            GRAPH <http://sparql.uniprot.org/uniprot> {
+                ?uniprot up:reviewed          true   ;
+                        up:mnemonic          ?mnemo ;
+                        up:organism          ?taxid ;
+                        up:annotation/
+                        up:catalyticActivity/
+                        up:catalyzedReaction ?rhea_id .
+            }
+        }
+
+
+    }
+}

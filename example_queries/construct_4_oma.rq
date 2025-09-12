@@ -1,0 +1,74 @@
+# Use-case step 4
+#
+# Retrieve all organisms that produce the enzymes/proteins identified at step 3
+# of the pipelines. These are the organisms with potential for bioremediation
+# of the original pollutants.
+#
+# Endpoint: https://sparql.omabrowser.org/sparql
+
+PREFIX lscr: <http://purl.org/lscr#>
+PREFIX obo: <http://purl.obolibrary.org/obo/>
+PREFIX orth: <http://purl.org/net/orth#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX up: <http://purl.uniprot.org/core/>
+PREFIX upk: <http://purl.uniprot.org/uniprot/>
+PREFIX ex: <http://example.org/>
+
+CONSTRUCT
+{
+    ?protein lscr:xrefUniprot ?uniprot .
+
+    # The tree that contains Orthologs. The leafs are proteins.
+    # This graph pattern defines the relationship protein1 is orthologs
+    # to protein2.
+    ?cluster a                         orth:OrthologsCluster ;
+             orth:hasHomologousMember  ?node1                ,
+                                       ?node2                .
+    ?node1   ex:hasHomologousMember ?protein              .
+    ?node2   ex:hasHomologousMember ?ortholog_protein     .
+
+    # OMA link to the second protein.
+    ?ortholog_protein rdfs:seeAlso      ?oma_link       ;
+                      ex:scientificName ?taxon_sci_name .
+}
+WHERE
+{
+    SERVICE <https://sparql.omabrowser.org/sparql> {
+        SELECT *
+        WHERE
+        {
+            # Uniprot reference retrieved in the previous step.
+            VALUES ?uniprot {
+                upk:A0A059WI14 upk:A0A0D3MJQ5 upk:A4INR2 upk:A6QHV6 upk:A7GP55 upk:A8XT16 upk:A8Z4K0 upk:B7HWU2 upk:B7INE4 upk:B9E7M5 upk:B9IRF0
+                upk:C0ZEV2 upk:C1F0A7 upk:C3LDK1 upk:C3P101 upk:D1A230 upk:O09131 upk:O27555 upk:O43315 upk:O50593 upk:O50595 upk:O52025 upk:O52027
+                upk:O66674 upk:O66908 upk:P08690 upk:P08692 upk:P0A005 upk:P0A006 upk:P0AB96 upk:P0AB97 upk:P0AFJ7 upk:P0CF87 upk:P0DKS5 upk:P0DKS6
+                upk:P0DKS7 upk:P0DKS8 upk:P0DKS9 upk:P0DKT0 upk:P34277 upk:P34345 upk:P44589 upk:P45945 upk:P45947 upk:P52145 upk:P52147 upk:P56627
+                upk:P63621 upk:P63622 upk:P72156 upk:P74313 upk:P74984 upk:P78417 upk:P81124 upk:P95354 upk:Q01257 upk:Q10SX6 upk:Q2FFW6 upk:Q2FXF5 upk:Q2YTL3 upk:Q336V5 upk:Q46366 upk:Q46465
+                upk:Q49UH1 upk:Q49WS7 upk:Q4LAA8 upk:Q4LAB5 upk:Q55794 upk:Q58542 upk:Q5HF01 upk:Q5HKB7 upk:Q5HRI4 upk:Q5WJS9 upk:Q5Y818 upk:Q639D2 upk:Q65IV4 upk:Q6AXV9 upk:Q6GIZ3 upk:Q6HGP0
+                upk:Q6N3Y0 upk:Q6SKR2 upk:Q6YRW7 upk:Q6ZEM6 upk:Q735E5 upk:Q74NT6 upk:Q7SIF3 upk:Q7SIF4 upk:Q7WTU0 upk:Q81BK3 upk:Q81NJ6 upk:Q8CQF5 upk:Q8ENQ5 upk:Q8GGJ6 upk:Q8GGJ7 upk:Q8GJ74
+                upk:Q8GY31 upk:Q8K2Q2 upk:Q8RUD6 upk:Q8TJK1 upk:Q8VHT6 upk:Q91WU5 upk:Q92R44 upk:Q9H4Y5 upk:Q9HBK9 upk:Q9JJJ3 upk:Q9K8K8 upk:Q9N1F5 upk:Q9Y5N5 upk:Q9Z339 upk:U2ZU49
+            }
+
+            # Retrieve the protein for which we want to search orthologs.
+            ?protein lscr:xrefUniprot ?uniprot .
+
+            # The tree that contains Orthologs. The leafs are proteins.
+            # This graph pattern defines the relationship protein1 is orthologs
+            # to protein2.
+            ?cluster a                         orth:OrthologsCluster ;
+                    orth:hasHomologousMember  ?node1                ,
+                                            ?node2                .
+            ?node1   orth:hasHomologousMember* ?protein              .
+            ?node2   orth:hasHomologousMember* ?ortholog_protein     .
+
+            # OMA link to the second protein.
+            ?ortholog_protein rdfs:seeAlso      ?oma_link       ;
+                            orth:organism/
+                            obo:RO_0002162/
+                            up:scientificName ?taxon_sci_name .
+
+            FILTER(?node1 != ?node2)
+        }
+    }
+}
