@@ -250,22 +250,24 @@ sparql_count <- function() {
 }
 
 
-# To make CONSTRUCT requests.
-sparql_construct <- function() {
+# To make DESCRIBE requests.
+sparql_describe <- function() {
   stop("not yet implemented")
 
   # This should support the same response types as DESCRIBE.
 }
 
 
-# To make DESCRIBE requests.
-sparql_describe <- function(
+# To make CONSTRUCT requests.
+sparql_construct <- function(
   endpoint,
   query,
   prefixes = DEFAULT_PREFIXES,
   add_prefixes = FALSE,
   http_params  = list(),
-  use_post = FALSE
+  use_post = FALSE,
+  iri_style = "long",
+  return_type = "graph"
 ) {
   # Prepend PREFIXes to the SPARQL query.
   http_params$query <- if (add_prefixes) {
@@ -296,62 +298,90 @@ sparql_describe <- function(
   message(paste("Query time:", elapsed_time(start_time, end_time = Sys.time())))
 
   # Parse the response to a list of n-triples.
-  query_result <- strsplit(httr2::resp_body_string(response), ".\n")[[1]] |>
-    lapply(trimws) |>
-    unlist()
-  is_iri_triple <- startsWith(query_result, "<") & endsWith(query_result, ">")
+  query_result <- strsplit(httr2::resp_body_string(response), ".\n") |>
+    unlist() |>
+    purrr::map_chr(trimws)
 
+  # If asked, use short IRI notation.
+  if (identical(iri_style, "short") && !is.null(prefixes)) {
+    query_result <- purrr::map_chr(
+      query_result,
+      ~ stringi::stri_replace_all_regex(
+        .x,
+        pattern = prefixes$long,
+        replacement =  paste0(prefixes$short, ":"),
+        vectorize_all = FALSE
+      )
+    )
+  }
 
-  # # prepare nodes list:
-  # # sort n-triples, so all the same obj/pred are grouped.
-  # d <- query_result[!is_iri_triple] |>
-  #   lapply(get_iri_and_lit_from_ntriple) |>
-  #   do.call(what = rbind) |>
-  #   as.data.frame(stringsAsFactors = FALSE) 
+  # Create a data frame with all regular nodes of the graph: "from" and "to"
+  # are the nodes, and "edge" is the predicate name (i.e. name of the edge).
+  edges <- query_result[grepl(REGEXP_IRI_TRIPLE, query_result, perl = TRUE)] |>
+    lapply(get_iri_from_ntriple) |>
+    do.call(what = rbind) |>
+    dplyr::as_tibble(stringsAsFactors = FALSE) |>
+    dplyr::select("from" = 1,  "to" = 3, "edge" = 2) |>
+    dplyr::arrange(dplyr::across(dplyr::everything()))
 
-  # d[2:9,] = d[1,]
-  # d[,3] = rep(c("a", "b", "c"), times=3)
-  # d
-
-  # library(dplyr)
-
-  # df <- d |>
-  #   dplyr::group_by(V1, V2) |>
-  #   dplyr::summarise(
-  #     literal = paste(V3, collapse = " | "),
-  #     .groups = "drop"
-  #   )
-  # tdf <- as.data.frame(df)
-  # tdf[2:5,] <- tdf[1,] 
-  # tdf[2,2] <- "foo"
-  # tdf[3,2] <- "bar"
-  # tdf[4:5,1] <- "testClass"
-  # tdf[4:5,3] <- "x | y"
-  # tdf
-
-  # tdf |> tidyr::pivot_wider(
-  #   names_from = V2,
-  #   values_from = literal,
-  #   values_fill = NA
-  # )
+  # Create a data frame with all nodes that have at least one "property"
+  # associated with them. The column with node names must be named "id" in
+  # order to be easily compatible with visNetwork.
+  nodes_with_properties <- query_result[grepl(
+    REGEXP_LITERAL_TRIPLE, query_result, perl = TRUE
+  )] |>
+    lapply(get_iri_and_lit_from_ntriple) |>
+    do.call(what = rbind) |>
+    dplyr::as_tibble(stringsAsFactors = FALSE) |>
+    dplyr::rename(id = 1, edge = 2, property = 3) |>
+    dplyr::mutate(
+      property = stringr::str_extract(property, REGEXP_LITERAL_UNQUOTED)
+    ) |>
+    dplyr::group_by(id, edge) |>
+    dplyr::summarise(
+      property = paste(property, collapse = " | "),
+      .groups = "drop"
+    ) |>
+    tidyr::pivot_wider(
+      names_from = edge,
+      values_from = property,
+      values_fill = NA
+    )
 
   # Return a list with 2 data frames:
   list(
-    edges = query_result[is_iri_triple] |>
-      lapply(get_iri_from_ntriple) |>
-      do.call(what = rbind) |>
-      as.data.frame(stringsAsFactors = FALSE) |>
-      dplyr::select("from" = 1,  "to" = 3, "attribute" = 2),
-    nodes = query_result[!is_iri_triple] |>
-      lapply(get_iri_and_lit_from_ntriple) |>
-      do.call(what = rbind) |>
-      as.data.frame(stringsAsFactors = FALSE) |>
-      purrr::set_names(c("subject", "predicate", "literal"))
+    edges = edges,
+    nodes = dplyr::full_join(
+      tibble::tibble(id = union(edges$from, edges$to)),  # List of all nodes.
+      nodes_with_properties, by = "id"
+    ) |>
+      dplyr::arrange(id)
   )
 }
 
+
+
 REGEXP_IRI <- "<[^>]*>"
-REGEXP_LITERAL <- "(?<=\").*(?=\")"
+REGEXP_IRI_TRIPLE <- paste0(
+  "^", REGEXP_IRI, "\\s*", REGEXP_IRI, "\\s*", REGEXP_IRI, "$"
+)
+REGEXP_LITERAL_UNQUOTED <- "(?<=\").*(?=\")"
+REGEXP_LITERAL <- "\".*\""
+REGEXP_DATA_TYPE <- paste0("\\^\\^", REGEXP_IRI)
+
+# Regexp to match a literal with an optional data type.
+# Matches:
+# * "10"^^<http://www.w3.org/2001/XMLSchema#decimal>   ->  10
+# * "10"
+# * "This should just \"work\""
+REGEXP_LITERAL_WITH_DATA_TYPE <- paste0(
+  REGEXP_LITERAL, "(", REGEXP_DATA_TYPE, ")?"
+)
+
+REGEXP_LITERAL_TRIPLE <- paste0(
+  "^", REGEXP_IRI, "\\s*", REGEXP_IRI, "\\s*",
+  REGEXP_LITERAL_WITH_DATA_TYPE, "$"
+)
 REGEXP_BLANK_NODE <- "_:[A-Za-z0-9]+"
 
 get_iri_from_ntriple <- function(x) {
@@ -364,8 +394,9 @@ get_iri_from_ntriple <- function(x) {
 
 get_iri_and_lit_from_ntriple <- function(x) {
   split_values <- stringr::str_extract_all(
-    x, paste(REGEXP_IRI, REGEXP_LITERAL, sep = "|")
-  )[[1]]
+    x, paste(REGEXP_IRI, REGEXP_LITERAL_WITH_DATA_TYPE, sep = "|")
+  ) |>
+    unlist()
   if (length(split_values) != 3) {
     stop("N-triple string '", x, "' does not contain 2 IRIs + literal values")
   }
