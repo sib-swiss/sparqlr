@@ -86,7 +86,7 @@ library(igraph)
 library(visNetwork)
 
 source("sparql.R")
-source("../use-case.git/utils.R")
+source("utils.R")
 
 # Set endpoints and paths to SPARQL queries.
 endpoint_wikidata <- "https://query.wikidata.org/sparql"
