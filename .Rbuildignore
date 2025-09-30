@@ -1,0 +1,7 @@
+^LICENSE$
+
+# Ignore lintr config file.
+^\.lintr$
+
+# Personal test files.
+^notes.R$
