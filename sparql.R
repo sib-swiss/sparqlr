@@ -102,12 +102,58 @@ query_result_to_tibble <- function(query_result, na_value = NA) {
 
 }
 
+
+#' @title Changes the style of IRIs from "long"
+#'
+#' @description Modify the style of IRIs in all columns of a tibble.
+#'
+#' @param t         Tibble whose IRIs are to be modified.
+#' @param iri_style One of "short", "mdlink", "html" or "long".
+modify_iri_style <- function(t, prefixes, iri_style = "short") {
+
+  # The input is assumed to already be in "long" form, so if "long" is
+  # requested, there is nothing to change.
+  if (iri_style == "long") {
+    return(t)
+  }
+
+  # Change IRIs from "long" to other forms.
+  short_forms <- unlist(prefixes[, 1])
+  long_forms <- unlist(prefixes[, 2])
+  pattern <- paste0("<(", long_forms, ")(\\S+)>")
+  replacement <- switch(
+    iri_style,
+    "short" = paste0(short_forms, ":$2"),
+    "mdlink" = paste0("[", short_forms, ":$2]($1$2)"),
+    "html" = paste0('<a href="', long_forms, '$2">', short_forms, ":$2</a>"),
+    rlang::abort(paste("Unsupported iri_style:", iri_style))
+  )
+
+  # Note: applying the regexp using dplyr is much faster than trying to apply
+  # it when converting individual RDF terms.
+  t |>
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::where(rlang::is_character),
+        function(x) {
+          stringi::stri_replace_all_regex(
+            unlist(x),
+            pattern = pattern,
+            replacement = replacement,
+            vectorize_all = FALSE
+          )
+        }
+      )
+    )
+}
+
+
 MIME_TYPE_SPARQL_JSON <- "application/sparql-results+json"
 MIME_TYPE_N_TRIPLE <- "application/n-triples"
 
 #' @title Run a SPARQL query
 #'
-#' @description run a SPARQL query, either SELECT, CONSTRUCT or DESCRIBE and
+#' @description Run a SPARQL query, either SELECT, CONSTRUCT or DESCRIBE and
 #' return the results as a tibble. Returned column names are the same as SPARQL
 #' variables. Detection of column types relies on R built-in methods, not RDF
 #' data types.
@@ -195,46 +241,20 @@ sparql_query <- function(
 
   # Convert the HTTP query response into a tibble. If the query returned
   # no results, exit function.
+  # Adapt IRI style to the format requested by the user.
   if (length(query_result$results$bindings) == 0) {
     return(NULL)
   }
-  query_result_tibble <- query_result_to_tibble(query_result)
-
-  # Adapt IRI style to the format requested by the user.
-  # Note: applying the regexp using dplyr is much faster than trying to apply
-  # it when converting individual RDF terms.
-  if (iri_style == "long") {
-    return(query_result_tibble)
-  }
-  short_forms <- unlist(prefixes[, 1])
-  long_forms <- unlist(prefixes[, 2])
-  pattern <- paste0("<(", long_forms, ")(\\S+)>")
-  replacement <- switch(
-    iri_style,
-    "short" = paste0(short_forms, ":$2"),
-    "mdlink" = paste0("[", short_forms, ":$2]($1$2)"),
-    "html" = paste0('<a href="', long_forms, '$2">', short_forms, ":$2</a>"),
-    rlang::abort(paste("Unsupported iri_style:", iri_style))
-  )
-  query_result_tibble |>
-    dplyr::mutate(
-      dplyr::across(
-        dplyr::where(rlang::is_character),
-        function(x) {
-          stringi::stri_replace_all_regex(
-            unlist(x),
-            pattern = pattern,
-            replacement = replacement,
-            vectorize_all = FALSE
-          )
-        }
-      )
-    )
+  query_result |>
+    query_result_to_tibble() |>
+    modify_iri_style(prefixes, iri_style = iri_style)
 }
+
 
 sparql_update <- function() {
   stop("not yet implemented")
 }
+
 
 sparql_ask <- function() {
   stop("not yet implemented")
@@ -297,23 +317,10 @@ sparql_construct <- function(
   )
   message(paste("Query time:", elapsed_time(start_time, end_time = Sys.time())))
 
-  # Parse the response to a list of n-triples.
-  query_result <- strsplit(httr2::resp_body_string(response), ".\n") |>
+  # Split the response to a list of n-triples.
+  query_result <- strsplit(query_result, ".\n") |>
     unlist() |>
     purrr::map_chr(trimws)
-
-  # If asked, use short IRI notation.
-  if (identical(iri_style, "short") && !is.null(prefixes)) {
-    query_result <- purrr::map_chr(
-      query_result,
-      ~ stringi::stri_replace_all_regex(
-        .x,
-        pattern = prefixes$long,
-        replacement =  paste0(prefixes$short, ":"),
-        vectorize_all = FALSE
-      )
-    )
-  }
 
   # Create a data frame with all regular nodes of the graph: "from" and "to"
   # are the nodes, and "edge" is the predicate name (i.e. name of the edge).
@@ -322,7 +329,8 @@ sparql_construct <- function(
     do.call(what = rbind) |>
     dplyr::as_tibble(stringsAsFactors = FALSE) |>
     dplyr::select("from" = 1,  "to" = 3, "edge" = 2) |>
-    dplyr::arrange(dplyr::across(dplyr::everything()))
+    dplyr::arrange(dplyr::across(dplyr::everything())) |>
+    modify_iri_style(prefixes, iri_style = iri_style)
 
   # Create a data frame with all nodes that have at least one "property"
   # associated with them. The column with node names must be named "id" in
@@ -337,6 +345,7 @@ sparql_construct <- function(
     dplyr::mutate(
       property = stringr::str_extract(property, REGEXP_LITERAL_UNQUOTED)
     ) |>
+    modify_iri_style(prefixes, iri_style = iri_style) |>
     dplyr::group_by(id, edge) |>
     dplyr::summarise(
       property = paste(property, collapse = " | "),
