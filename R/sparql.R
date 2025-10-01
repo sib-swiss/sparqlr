@@ -1,51 +1,53 @@
-
+MIME_TYPE_SPARQL_JSON <- "application/sparql-results+json"
+MIME_TYPE_N_TRIPLE <- "application/n-triples"
 DEFAULT_PREFIXES <- tibble::tribble(
   ~short, ~long,
   "rdf",  "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
   "rdfs", "http://www.w3.org/2000/01/rdf-schema#"
 )
 
-#' Returns a string with the formatted elapsed time.
-#' @keywords internal
-elapsed_time <- function(start_time, end_time) {
-  elapsed_seconds <- round(as.numeric(end_time - start_time, units = "secs"))
-  h <- elapsed_seconds %/% 3600
-  m <- (elapsed_seconds %% 3600) %/% 60
-  s <- elapsed_seconds %% 60
-  sprintf("%02d:%02d:%02d", h, m, s)
-}
 
-#' Converts a 2-column tibble into a SPARQL PREFIX string.
-#'
-#' @param prefixes  2-column tibble containing the long and short form of
-#'                  the SPARQL prefixes.
-#'
-#' @keywords internal
-as_sparql_prefix <- function(prefixes) {
-  paste(
-    paste0("PREFIX ", unlist(prefixes[, 1]), ": <", unlist(prefixes[, 2]), ">"),
-    collapse = "\n"
+# Run an HTTP request on a SPARQL endpoint.
+run_http_request <- function(
+  endpoint,
+  http_params,
+  mime_type,
+  use_post = FALSE
+) {
+  # Build and run the HTTP request.
+  add_params <- if (use_post) httr2::req_body_form else httr2::req_url_query
+  response <- httr2::request(endpoint) |>
+    httr2::req_headers(Accept = mime_type) |>
+    add_params(!!!http_params) |>
+    httr2::req_perform()
+
+  # Return the HTTP response if it completed successfully.
+  if (httr2::resp_status(response) == 200) {
+    return(response)
+  }
+
+  # Otherwise an error is raised.
+  response_summary <- paste(capture.output(print(response)), collapse = "\n")
+  response_header <- paste(
+    capture.output(print(response$header)), collapse = "\n"
+  )
+  rlang::abort(
+    paste0(
+      "Error in HTTP request.'\n",
+      " -> endpoint    : ", endpoint, "\n",
+      " -> http_params : ", http_params, "\n",
+      " -> MIME type   : ", mime_type, "\n",
+      " -> request type: ", ifelse(use_post, "POST", "GET"), "\n",
+      " -> response    : ", response_summary, "\n",
+      " -> response header: ", response_header, "\n"
+    )
   )
 }
 
-#' Checks whether the `x` list object has the expected structure of a standard
-#' SPARQL query response in JSON format.
-#'
-#' @keywords internal
-is_valid_rdf_term <- function(x) {
-  is.list(x) && !is.null(x$type) && !is.null(x$value)
-}
-
-is_valid_query_result <- function(x) {
-  is.list(x) &&
-    all(c("head", "results") %in% names(x) &&
-    "bindings" %in% names(x$results))
-}
 
 #' Convert an individual RDF term to an R string.
 #'
-#' @param value    must be of type `list` with `type` and `value` fields,
-#'                 or `NULL`.
+#' @param value    A list with `type` and `value` fields, or `NULL`.
 #' @param na_value Value returned when `value` is NULL or an empty string.
 #'
 #' @keywords internal
@@ -64,8 +66,68 @@ rdf_term_to_string <- function(value, na_value = NA) {
   )
 }
 
-#' Parse a `query_result` object - a nested list derived from the JSON returned
-#' by a SPARQL query - and return it as an R tibble.
+
+#' Parse an HTTP response with content type "application/sparql-results+json".
+#'
+#' @param response SPARQL SELECT HTTP query response.
+#'
+#' @keywords internal
+parse_select_response <- function(response) {
+
+  # The HTTP response for a SPARQL SELECT query is expected to be in JSON
+  # format. This attempts to parse the JSON string into a list.
+  # Fallback on HTML if that fails.
+  parsed_response <- tryCatch(
+    httr2::resp_body_json(response),
+    error = httr2::resp_body_html
+  )
+
+  # Verify that the parsed response has the expected structure.
+  if (
+    !(is.list(parsed_response) &&
+        all(c("head", "results") %in% names(parsed_response)) &&
+        "bindings" %in% names(parsed_response$results))
+  ) {
+    rlang::abort(
+      paste0(
+        "Error parsing response from SPARQL SELECT query: '",
+        parsed_response,
+        "' is not a valid SPARQL SELECT query result."
+      )
+    )
+  }
+
+  parsed_response
+}
+
+
+#' Parse an HTTP response with content type "application/n-triples".
+#'
+#' @param response SPARQL CONSTRUCT HTTP query response.
+#'
+#' @keywords internal
+parse_construct_response <- function(response) {
+
+  # The HTTP response for a SPARQL CONSTRUCT query is expected to be an
+  # n-triple string. This attempts to parse the response body to a string.
+  # Fallback on HTML if that fails.
+  parsed_response <- tryCatch(
+    httr2::resp_body_string(response),
+    error = httr2::resp_body_html
+  )
+
+  # Split the response to a list of n-triples.
+  strsplit(parsed_response, ".\n") |>
+    unlist() |>
+    purrr::map_chr(trimws)
+}
+
+
+#' Convert a SPARQL SELECT query result into a tibble.
+#'
+#' @description
+#' Converts the result of a parsed SPARQL SELECT query (a list object) into an
+#' R tibble.
 #'
 #' @param query_result  Object (list) to parse.
 #' @param na_value      Value with which to replace empty/missing fields.
@@ -73,17 +135,8 @@ rdf_term_to_string <- function(value, na_value = NA) {
 #' @keywords internal
 query_result_to_tibble <- function(query_result, na_value = NA) {
 
-  if (!is_valid_query_result(query_result)) {
-    rlang::abort(
-      paste0(
-        "Input value '", query_result, "' is not a valid SPARQL query result"
-      )
-    )
-  }
-
-  # Parse the "query_result" nested list object.
-  # For each record ("table row") returned by the request, check whether some
-  # fields ("table columns") are missing, which indicates a "NA" value.
+  # Parse the nested list: for each record (row) returned by the request, check
+  # whether some fields (columns) are missing, which indicates a "NA" value.
   variable_names <- unlist(query_result$head)
   lapply(
     variable_names,
@@ -99,11 +152,10 @@ query_result_to_tibble <- function(query_result, na_value = NA) {
     tibble::as_tibble() |>
     # Call the built-in type conversion of R.
     type.convert(na.strings = c(""), as.is = TRUE)
-
 }
 
 
-#' @title Changes the style of IRIs from "long"
+#' Change the style of IRIs from "long" into another form.
 #'
 #' @description Modify the style of IRIs in all columns of a tibble.
 #'
@@ -113,8 +165,8 @@ query_result_to_tibble <- function(query_result, na_value = NA) {
 #' @param iri_style One of "short", "mdlink", "html" or "long".
 #'
 #' @return An copy of the input tibble `t` where the IRI style was modified.
-#' @export
 #'
+#' @export
 modify_iri_style <- function(t, prefixes, iri_style = "short") {
 
   # The input is assumed to already be in "long" form, so if "long" is
@@ -153,10 +205,7 @@ modify_iri_style <- function(t, prefixes, iri_style = "short") {
 }
 
 
-MIME_TYPE_SPARQL_JSON <- "application/sparql-results+json"
-MIME_TYPE_N_TRIPLE <- "application/n-triples"
-
-#' @title Run a SPARQL query
+#' Run a SPARQL SELECT query
 #'
 #' @description Run a SPARQL query, either SELECT, CONSTRUCT or DESCRIBE and
 #' return the results as a tibble. Returned column names are the same as SPARQL
@@ -186,28 +235,12 @@ MIME_TYPE_N_TRIPLE <- "application/n-triples"
 #' @return             A tibble with the query results or NULL if the query
 #'                     returns nothing.
 #' @seealso            SPARQL_ask() SPARQL_update()
-#' @export
 #'
-#' @examples
-#' \dontrun{
-#'  sparql_query(
-#'    "https://query.wikidata.org/sparql",
-#'    "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-#'    SELECT ?message
-#'    WHERE{
-#'        wd:Q131303 rdfs:label ?message
-#'        FILTER( LANG( ?message ) = 'en' )
-#'    }"
-#'  )
-#' }
-sparql_query <- function(
+#' @export
+sparql_select <- function(
   endpoint,
   query,
-  prefixes = tibble::tribble(
-    ~short, ~long,
-    "rdf",  "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-    "rdfs", "http://www.w3.org/2000/01/rdf-schema#"
-  ),
+  prefixes     = DEFAULT_PREFIXES,
   http_params  = list(),
   use_post     = FALSE,
   add_prefixes = FALSE,
@@ -216,76 +249,61 @@ sparql_query <- function(
   echo         = FALSE
 ) {
   # Prepend PREFIXes to the SPARQL query.
-  http_params$query <- if (add_prefixes) {
-    paste(as_sparql_prefix(prefixes), query, sep = "\n\n")
-  } else {
-    query
-  }
-  if (echo) {
-    cat(paste0(http_params$query, "\n"))
-  }
+  query <- add_prefixes_to_query(
+    query,
+    prefixes = ifelse(add_prefixes, prefixes, NULL)
+  )
+  if (echo) cat(query)
+  http_params$query <- query
 
-  # Build and run the HTTP request.
+  # Run the HTTP request on the SPARQL endpoint.
   start_time <- Sys.time()
-  add_params <- if (use_post) httr2::req_body_form else httr2::req_url_query
-  response <- httr2::request(endpoint) |>
-    httr2::req_headers(Accept = "application/sparql-results+json") |>
-    add_params(!!!http_params) |>
-    httr2::req_perform()
-
-  # Make sure the HTTP request completed successfully.
-  if (httr2::resp_status(response) != 200) {
-    print(response)
-    stop(paste(response$header, sep = "\n", collapse = "\n"))
-  }
-
-  # Try to parse the response as JSON. Fallback on HTML if that fails.
-  query_result <- tryCatch(
-    httr2::resp_body_json(response),
-    error = httr2::resp_body_html
+  response <- run_http_request(
+    endpoint,
+    http_params,
+    mime_type = MIME_TYPE_SPARQL_JSON,
+    use_post = use_post
   )
   message(paste("Query time:", elapsed_time(start_time, end_time = Sys.time())))
 
-  # Convert the HTTP query response into a tibble. If the query returned
-  # no results, exit function.
-  # Adapt IRI style to the format requested by the user.
+  # Try to parse the response as JSON. If the query returned no results, exit
+  # function.
+  query_result <- parse_select_response(response)
   if (length(query_result$results$bindings) == 0) {
     return(NULL)
   }
+
+  # Convert the HTTP query response into a tibble. Adapt IRI style to the
+  # format requested by the user.
   query_result |>
     query_result_to_tibble() |>
     modify_iri_style(prefixes, iri_style = iri_style)
 }
 
 
-sparql_update <- function() {
-  stop("not yet implemented")
-}
-
-
-sparql_ask <- function() {
-  stop("not yet implemented")
-
-  # This should support:
-  # httr2::req_headers(Accept = "application/sparql-results+json")
-}
-
-
-sparql_count <- function() {
-  stop("not yet implemented")
-
-}
-
-
-# To make DESCRIBE requests.
-sparql_describe <- function() {
-  stop("not yet implemented")
-
-  # This should support the same response types as DESCRIBE.
-}
-
-
-# To make CONSTRUCT requests.
+#' Run a SPARQL CONSTRUCT query
+#'
+#' @description
+#' Executes a SPARQL CONSTRUCT query and returns the results as a list
+#' containing two tibbles: one for edges (triples with IRIs) and one for nodes
+#' with properties.
+#' IRIs can be formatted in different styles using the `iri_style` argument.
+#'
+#' @param endpoint     URL of the SPARQL endpoint.
+#' @param query        SPARQL CONSTRUCT query as a string.
+#' @param prefixes     Optional data frame whose first two columns are short
+#'                     and long versions of base IRIs.
+#' @param add_prefixes Boolean to add PREFIX declarations from `prefixes` to
+#'                     the query.
+#' @param http_params  Additional parameter/value pairs for the HTTP request.
+#' @param use_post     Boolean to use POST instead of GET for the HTTP request.
+#' @param iri_style    One of "long", "short", "html", or "mdlink" to encode
+#'                     returned IRIs.
+#' @param echo         Print the SPARQL query that is executed in the terminal.
+#'
+#' @return             A list with two tibbles: `edges` and `nodes`.
+#'
+#' @export
 sparql_construct <- function(
   endpoint,
   query,
@@ -294,40 +312,32 @@ sparql_construct <- function(
   http_params  = list(),
   use_post = FALSE,
   iri_style = "long",
-  return_type = "graph"
+  echo = FALSE
 ) {
   # Prepend PREFIXes to the SPARQL query.
-  http_params$query <- if (add_prefixes) {
-    paste(as_sparql_prefix(prefixes), query, sep = "\n\n")
-  } else {
-    query
-  }
+  query <- add_prefixes_to_query(
+    query,
+    prefixes = ifelse(add_prefixes, prefixes, NULL)
+  )
+  if (echo) cat(query)
+  http_params$query <- query
 
-  # Build and run the HTTP request.
+  # Run the HTTP request on the SPARQL endpoint.
   start_time <- Sys.time()
-  add_params <- if (use_post) httr2::req_body_form else httr2::req_url_query
-  response <- httr2::request(endpoint) |>
-    httr2::req_headers(Accept = MIME_TYPE_N_TRIPLE) |>
-    add_params(!!!http_params) |>
-    httr2::req_perform()
-
-  # Make sure the HTTP request completed successfully.
-  if (httr2::resp_status(response) != 200) {
-    print(response)
-    stop(paste(response$header, sep = "\n", collapse = "\n"))
-  }
-
-  # Try to parse the response as a string. Fallback on HTML if that fails.
-  query_result <- tryCatch(
-    httr2::resp_body_string(response),
-    error = httr2::resp_body_html
+  response <- run_http_request(
+    endpoint,
+    http_params,
+    mime_type = MIME_TYPE_N_TRIPLE,
+    use_post = use_post
   )
   message(paste("Query time:", elapsed_time(start_time, end_time = Sys.time())))
 
-  # Split the response to a list of n-triples.
-  query_result <- strsplit(query_result, ".\n") |>
-    unlist() |>
-    purrr::map_chr(trimws)
+  # Try to parse the response as n-triple strings. If the query returned no
+  # results, exit function.
+  query_result <- parse_construct_response(response)
+  if (length(query_result) == 0) {
+    return(NULL)
+  }
 
   # Create a data frame with all regular nodes of the graph: "from" and "to"
   # are the nodes, and "edge" is the predicate name (i.e. name of the edge).
@@ -376,51 +386,91 @@ sparql_construct <- function(
 }
 
 
-
-REGEXP_IRI <- "<[^>]*>"
-REGEXP_IRI_TRIPLE <- paste0(
-  "^", REGEXP_IRI, "\\s*", REGEXP_IRI, "\\s*", REGEXP_IRI, "$"
-)
-REGEXP_LITERAL_UNQUOTED <- "(?<=\").*(?=\")"
-REGEXP_LITERAL <- "\".*\""
-REGEXP_DATA_TYPE <- paste0("\\^\\^", REGEXP_IRI)
-
-# Regexp to match a literal with an optional data type.
-# Matches:
-# * "10"^^<http://www.w3.org/2001/XMLSchema#decimal>   ->  10
-# * "10"
-# * "This should just \"work\""
-REGEXP_LITERAL_WITH_DATA_TYPE <- paste0(
-  REGEXP_LITERAL, "(", REGEXP_DATA_TYPE, ")?"
-)
-
-REGEXP_LITERAL_TRIPLE <- paste0(
-  "^", REGEXP_IRI, "\\s*", REGEXP_IRI, "\\s*",
-  REGEXP_LITERAL_WITH_DATA_TYPE, "$"
-)
-REGEXP_BLANK_NODE <- "_:[A-Za-z0-9]+"
-
-get_iri_from_ntriple <- function(x) {
-  split_values <- stringr::str_extract_all(x, REGEXP_IRI)[[1]]
-  if (length(split_values) != 3) {
-    stop("N-triple string '", x, "' does not contain 3 IRI values")
-  }
-  split_values
+sparql_update <- function() {
+  stop("not yet implemented")
 }
 
-get_iri_and_lit_from_ntriple <- function(x) {
-  split_values <- stringr::str_extract_all(
-    x, paste(REGEXP_IRI, REGEXP_LITERAL_WITH_DATA_TYPE, sep = "|")
-  ) |>
-    unlist()
-  if (length(split_values) != 3) {
-    stop("N-triple string '", x, "' does not contain 2 IRIs + literal values")
-  }
-  split_values
+
+sparql_ask <- function() {
+  stop("not yet implemented")
+
+  # This should support:
+  # httr2::req_headers(Accept = "application/sparql-results+json")
 }
 
-# For unit testing
-# Test strings:
-#   "<foo> <bar> <foobar>"
-#   "<a> <b> \"foo <bar> <bar>\"@en"
-#   "<a> <b> \"foo <bar> <bar>\"^^integer"
+
+sparql_count <- function() {
+  stop("not yet implemented")
+
+}
+
+
+#' Run a SPARQL DESCRIBE query
+#'
+#' @description
+#' Executes a SPARQL DESCRIBE query and returns the results tibble with 3
+#' columns: subject, predicate, object.
+#'
+#' IRIs can be formatted in different styles using the `iri_style` argument.
+#'
+#' @param endpoint     URL of the SPARQL endpoint.
+#' @param query        SPARQL CONSTRUCT query as a string.
+#' @param prefixes     Optional data frame whose first two columns are short
+#'                     and long versions of base IRIs.
+#' @param add_prefixes Boolean to add PREFIX declarations from `prefixes` to
+#'                     the query.
+#' @param http_params  Additional parameter/value pairs for the HTTP request.
+#' @param use_post     Boolean to use POST instead of GET for the HTTP request.
+#' @param iri_style    One of "long", "short", "html", or "mdlink" to encode
+#'                     returned IRIs.
+#' @param echo         Print the SPARQL query that is executed in the terminal.
+#'
+#' @return             A list with two tibbles: `edges` and `nodes`.
+#'
+#' @export
+sparql_describe <- function(
+  endpoint,
+  query,
+  prefixes = DEFAULT_PREFIXES,
+  add_prefixes = FALSE,
+  http_params  = list(),
+  use_post = FALSE,
+  iri_style = "long",
+  echo = FALSE
+) {
+  # Prepend PREFIXes to the SPARQL query.
+  query <- add_prefixes_to_query(
+    query,
+    prefixes = ifelse(add_prefixes, prefixes, NULL)
+  )
+  if (echo) cat(query)
+  http_params$query <- query
+
+  # Run the HTTP request on the SPARQL endpoint.
+  start_time <- Sys.time()
+  response <- run_http_request(
+    endpoint,
+    http_params,
+    mime_type = MIME_TYPE_N_TRIPLE,
+    use_post = use_post
+  )
+  message(paste("Query time:", elapsed_time(start_time, end_time = Sys.time())))
+
+  # Try to parse the response as n-triple strings. If the query returned no
+  # results, exit function.
+  query_result <- parse_construct_response(response)
+  if (length(query_result) == 0) {
+    return(NULL)
+  }
+
+  # Convert the list of n-triples into a tibble with
+  # subject / predicate / object columns.
+  n_triples_to_tibble(n_triples = query_result)
+}
+
+# Convert a list of n-triples to a 3-column tibble: subject, predicate, object.
+n_triples_to_tibble <- function(n_triples) {
+  stringr::str_split(n_triples, "\\s+", simplify = TRUE) |>
+    tibble::as_tibble(stringsAsFactors = FALSE, .name_repair = "minimal") |>
+    dplyr::rename(subject = 1, predicate = 2, object = 3)
+}

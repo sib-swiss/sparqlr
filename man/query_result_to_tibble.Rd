@@ -2,8 +2,7 @@
 % Please edit documentation in R/sparql.R
 \name{query_result_to_tibble}
 \alias{query_result_to_tibble}
-\title{Parse a \code{query_result} object - a nested list derived from the JSON returned
-by a SPARQL query - and return it as an R tibble.}
+\title{Convert a SPARQL SELECT query result into a tibble.}
 \usage{
 query_result_to_tibble(query_result, na_value = NA)
 }
@@ -13,7 +12,7 @@ query_result_to_tibble(query_result, na_value = NA)
 \item{na_value}{Value with which to replace empty/missing fields.}
 }
 \description{
-Parse a \code{query_result} object - a nested list derived from the JSON returned
-by a SPARQL query - and return it as an R tibble.
+Converts the result of a parsed SPARQL SELECT query (a list object) into an
+R tibble.
 }
 \keyword{internal}

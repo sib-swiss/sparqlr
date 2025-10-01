@@ -2,7 +2,7 @@
 % Please edit documentation in R/sparql.R
 \name{modify_iri_style}
 \alias{modify_iri_style}
-\title{Changes the style of IRIs from "long"}
+\title{Change the style of IRIs from "long" into another form.}
 \usage{
 modify_iri_style(t, prefixes, iri_style = "short")
 }

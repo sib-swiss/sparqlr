@@ -1,3 +1,46 @@
+
+# Return a string with the elapsed time formatted as "hh:mm:ss".
+elapsed_time <- function(start_time, end_time) {
+  elapsed_seconds <- round(as.numeric(end_time - start_time, units = "secs"))
+  h <- elapsed_seconds %/% 3600
+  m <- (elapsed_seconds %% 3600) %/% 60
+  s <- elapsed_seconds %% 60
+  sprintf("%02d:%02d:%02d", h, m, s)
+}
+
+#' Convert a 2-column tibble into a SPARQL PREFIX multi-line string.
+#'
+#' @param prefixes A tibble with columns "short" and "long", containing
+#'   respectively the short and long form of SPARQL prefixes.
+#'
+#' @keywords internal
+as_sparql_prefix <- function(prefixes) {
+  if (nrow(prefixes) == 0) {
+    return("")
+  }
+  paste0("PREFIX ", prefixes$short, ": <", prefixes$long, ">") |>
+    paste(collapse = "\n")
+}
+
+# Add the specified PREFIXes to a SPARQL query.
+add_prefixes_to_query <- function(query, prefixes) {
+  if (!is.null(prefixes) && nrow(prefixes) > 0) {
+    paste(as_sparql_prefix(prefixes), query, sep = "\n\n")
+  } else {
+    query
+  }
+}
+
+
+# Verify that the `x` list object has the expected structure of a standard
+# SPARQL query response in JSON format.
+is_valid_rdf_term <- function(x) {
+  is.list(x) && !is.null(x$type) && !is.null(x$value)
+}
+
+
+
+
 # Read a SPARQL query from a `.rq` file and return it as a multi-line string.
 load_query_from_file <- function(path, remove_comments = FALSE) {
   query <- readLines(path)
@@ -21,10 +64,6 @@ load_prefixes_from_file <- function(path) {
     dplyr::mutate(short = stringr::str_remove_all(short, ":"))
 }
 
-
-
-#library(tidyverse)
-
 subtractive_mix <- function(hex_colors) {
   if (length(hex_colors) == 0) {
     return("#D3D3D3")
@@ -42,10 +81,3 @@ subtractive_mix <- function(hex_colors) {
   # Convert back to hex
   rgb(mixed_rgb[1], mixed_rgb[2], mixed_rgb[3], maxColorValue = 255)
 }
-
-
-
-test <- c("#FF0000", "#7ad3f7")
-subtractive_mix(test)
-
-x <- "#7A0000"

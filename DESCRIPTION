@@ -1,9 +1,11 @@
 Package: sparqlr
 Title: A SPARQL client for R
 Version: 0.1.0
-Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: Provides a SPARQL client for R.  The second line goes here.
+Authors@R: c(
+    person("Marco", "Pagni", , "marco.pagni@sib.swiss", role = "aut"),
+    person("Robin", "Engler", , "robin.engler@sib.swiss", role = c("aut", "cre"))
+  )
+Description: Provides a SPARQL client for R.
 License: GPL-3
 URL: https://github.com/sib-swiss/sparqlr
 BugReports: https://github.com/sib-swiss/sparqlr/issues
