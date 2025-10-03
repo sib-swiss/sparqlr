@@ -6,19 +6,55 @@ DEFAULT_PREFIXES <- tibble::tribble(
   "rdfs", "http://www.w3.org/2000/01/rdf-schema#"
 )
 
+# Run an HTTP request on a SPARQL endpoint.
+sparql_query <- function(
+  endpoint,
+  query,
+  query_form = c("SELECT", "CONSTRUCT", "DESCRIBE", "ASK"),
+  http_extra_params,
+  request_method = "POST"
+) {
+  query_type <- match.arg(query_type)
+
+  http_params <- http_extra_params
+  http_params$query <- query
+
+  # Run the HTTP request on the SPARQL endpoint.
+  response <- http_request(
+    endpoint,
+    http_params,
+    mime_type = MIME_TYPE_SPARQL_JSON,
+    request_method = request_method
+  )
+  
+
+}
 
 # Run an HTTP request on a SPARQL endpoint.
-run_http_request <- function(
+http_request <- function(
   endpoint,
   http_params,
   mime_type,
-  use_post = FALSE
+  request_method = c("POST", "GET")
 ) {
+  # Validate user input.
+  request_method <- match.arg(request_method)
+
+  # add_params <- if (request_method == "POST") {
+  #   httr2::req_body_form
+  # } else {
+  #   httr2::req_url_query
+  # }
+  # response <- httr2::request(endpoint) |>
+  #   httr2::req_headers(Accept = mime_type) |>
+  #   add_params(!!!http_params) |>
+  #   httr2::req_perform()
+
   # Build and run the HTTP request.
-  add_params <- if (use_post) httr2::req_body_form else httr2::req_url_query
   response <- httr2::request(endpoint) |>
     httr2::req_headers(Accept = mime_type) |>
-    add_params(!!!http_params) |>
+    (if (request_method == "POST") httr2::req_body_form
+     else httr2::req_url_query)(!!!http_params) |>
     httr2::req_perform()
 
   # Return the HTTP response if it completed successfully.
@@ -34,11 +70,11 @@ run_http_request <- function(
   rlang::abort(
     paste0(
       "Error in HTTP request.'\n",
-      " -> endpoint    : ", endpoint, "\n",
-      " -> http_params : ", http_params, "\n",
-      " -> MIME type   : ", mime_type, "\n",
-      " -> request type: ", ifelse(use_post, "POST", "GET"), "\n",
-      " -> response    : ", response_summary, "\n",
+      " -> endpoint       : ", endpoint, "\n",
+      " -> http_params    : ", http_params, "\n",
+      " -> MIME type      : ", mime_type, "\n",
+      " -> request method : ", request_method, "\n",
+      " -> response       : ", response_summary, "\n",
       " -> response header: ", response_header, "\n"
     )
   )
@@ -61,7 +97,7 @@ rdf_term_to_string <- function(value, na_value = NA) {
     value$type,
     "uri" = paste0("<", value$value, ">"),
     "literal" = value$value,
-    "bnode" = paste0("_:", value$value),
+    "bnode" = paste0("_:", sub("^_:", "", value$value)),
     rlang::abort(paste("Unknown RDF type in JSON response:", value$type))
   )
 }
@@ -154,8 +190,23 @@ query_result_to_tibble <- function(query_result, na_value = NA) {
     type.convert(na.strings = c(""), as.is = TRUE)
 }
 
+# Verify that a PREFIX tibble (or data frame) has the correct structure.
+is_valid_prefix_tibble <- function(t) {
+  required_columns <- c("long", "short")
 
-#' Change the style of IRIs from "long" into another form.
+  if (!inherits(t, "data.frame") || !all(names(t) %in% required_columns)) {
+    rlang::abort(
+      paste0(
+        "Input must be a tibble or data frame with columns: ",
+        paste(required_columns, collapse = ", ")
+      )
+    )
+  }
+
+  invisible(TRUE)
+}
+
+#' Change the style of IRIs from "long" or "short" into another form.
 #'
 #' @description Modify the style of IRIs in all columns of a tibble.
 #'
@@ -167,7 +218,15 @@ query_result_to_tibble <- function(query_result, na_value = NA) {
 #' @return An copy of the input tibble `t` where the IRI style was modified.
 #'
 #' @export
-modify_iri_style <- function(t, prefixes, iri_style = "short") {
+modify_iri_style <- function(
+  t,
+  prefixes,
+  iri_style = c("short", "long", "mdlink", "html")
+) {
+
+  # Validate user input.
+  iri_style <- match.arg(iri_style)
+  if (is.null(prefixes)) return(t)
 
   # The input is assumed to already be in "long" form, so if "long" is
   # requested, there is nothing to change.
@@ -176,8 +235,8 @@ modify_iri_style <- function(t, prefixes, iri_style = "short") {
   }
 
   # Change IRIs from "long" to other forms.
-  short_forms <- unlist(prefixes[, 1])
-  long_forms <- unlist(prefixes[, 2])
+  short_forms <- unlist(prefixes$short)
+  long_forms <- unlist(prefixes$long)
   pattern <- paste0("<(", long_forms, ")(\\S+)>")
   replacement <- switch(
     iri_style,
@@ -215,54 +274,40 @@ modify_iri_style <- function(t, prefixes, iri_style = "short") {
 #' In the HTTP request, the "application/sparql-results+json" MIME type is
 #' used, which is supported by most SPARQL endpoints.
 #'
-#' @param endpoint     URL of SPARQL endpoint.
-#' @param query        SPARQL query as a string.
-#' @param prefixes     Optional data frame whose first two columns are taken
-#'                     for short and long versions of base IRIs.
-#' @param http_params  Additional parameter/value pair to pass with the HTTP
-#'                     request.
-#'                     Example: some endpoints accept a "timeout" argument.
-#'                     This could be passed via this argument.
-#' @param use_post     Boolean to switch http protocol (default to GET). The
-#'                     main benefit of POST is to allow for larger input query.
-#' @param add_prefixes Boolean to add PREFIX declarations passed to the
-#'                     `prefixes` argument to the SPARQL query.
-#' @param iri_style    One of "long", "short" , "html" or "mdlink" (markdown
-#'                     link), to encode returned IRIs.
-#' @param na_value     Value with which to replace empty fields.
-#' @param echo         Boolean value to echo the SPARQL query before execution.
+#' @param endpoint       URL of SPARQL endpoint.
+#' @param query          SPARQL query as a string.
+#' @param request_method HTTP method to use to submit the request.
+#' @param http_extra_params Additional parameter/value pair to pass to the HTTP
+#'                          request. E.g. some endpoints accept a "timeout"
+#'                          argument, which could be passed via this argument.
+#' @param prefixes       Optional data frame whose first two columns are taken
+#'                       for short and long versions of base IRIs.
+#' @param echo           If `TRUE`, the SPARQL query is printed before it gets
+#'                       sent to the endpoint for execution.
 #'
-#' @return             A tibble with the query results or NULL if the query
-#'                     returns nothing.
-#' @seealso            SPARQL_ask() SPARQL_update()
-#'
+#' @return               A tibble with the query results or NULL if the query
+#'                       returns nothing.
 #' @export
 sparql_select <- function(
   endpoint,
   query,
-  prefixes     = DEFAULT_PREFIXES,
-  http_params  = list(),
-  use_post     = FALSE,
-  add_prefixes = FALSE,
-  iri_style    = "short",
-  na_value     = NA,
-  echo         = FALSE
+  prefixes          = NULL,
+  request_method    = c("POST", "GET"),
+  http_extra_params = list()
 ) {
-  # Prepend PREFIXes to the SPARQL query.
-  query <- add_prefixes_to_query(
-    query,
-    prefixes = ifelse(add_prefixes, prefixes, NULL)
-  )
-  if (echo) cat(query)
+  # Validate user input.
+  request_method <- match.arg(request_method)
+
+  http_params <- http_extra_params
   http_params$query <- query
 
   # Run the HTTP request on the SPARQL endpoint.
   start_time <- Sys.time()
-  response <- run_http_request(
+  response <- http_request(
     endpoint,
     http_params,
     mime_type = MIME_TYPE_SPARQL_JSON,
-    use_post = use_post
+    request_method = request_method
   )
   message(paste("Query time:", elapsed_time(start_time, end_time = Sys.time())))
 
@@ -277,7 +322,7 @@ sparql_select <- function(
   # format requested by the user.
   query_result |>
     query_result_to_tibble() |>
-    modify_iri_style(prefixes, iri_style = iri_style)
+    modify_iri_style(prefixes, iri_style = "short")
 }
 
 
@@ -289,14 +334,14 @@ sparql_select <- function(
 #' with properties.
 #' IRIs can be formatted in different styles using the `iri_style` argument.
 #'
-#' @param endpoint     URL of the SPARQL endpoint.
-#' @param query        SPARQL CONSTRUCT query as a string.
-#' @param prefixes     Optional data frame whose first two columns are short
-#'                     and long versions of base IRIs.
+#' @param endpoint       URL of the SPARQL endpoint.
+#' @param query          SPARQL CONSTRUCT query as a string.
+#' @param prefixes       Optional data frame whose first two columns are short
+#'                       and long versions of base IRIs.
+#' @param request_method HTTP method to use to submit the request.
 #' @param add_prefixes Boolean to add PREFIX declarations from `prefixes` to
 #'                     the query.
 #' @param http_params  Additional parameter/value pairs for the HTTP request.
-#' @param use_post     Boolean to use POST instead of GET for the HTTP request.
 #' @param iri_style    One of "long", "short", "html", or "mdlink" to encode
 #'                     returned IRIs.
 #' @param echo         Print the SPARQL query that is executed in the terminal.
@@ -307,12 +352,9 @@ sparql_select <- function(
 sparql_construct <- function(
   endpoint,
   query,
-  prefixes = DEFAULT_PREFIXES,
-  add_prefixes = FALSE,
-  http_params  = list(),
-  use_post = FALSE,
-  iri_style = "long",
-  echo = FALSE
+  prefixes          = NULL,
+  request_method    = c("POST", "GET"),
+  http_extra_params = list()
 ) {
   # Prepend PREFIXes to the SPARQL query.
   query <- add_prefixes_to_query(
@@ -324,11 +366,11 @@ sparql_construct <- function(
 
   # Run the HTTP request on the SPARQL endpoint.
   start_time <- Sys.time()
-  response <- run_http_request(
+  response <- http_request(
     endpoint,
     http_params,
     mime_type = MIME_TYPE_N_TRIPLE,
-    use_post = use_post
+    request_method = request_method
   )
   message(paste("Query time:", elapsed_time(start_time, end_time = Sys.time())))
 
@@ -417,10 +459,10 @@ sparql_count <- function() {
 #' @param query        SPARQL CONSTRUCT query as a string.
 #' @param prefixes     Optional data frame whose first two columns are short
 #'                     and long versions of base IRIs.
+#' @param request_method HTTP method to use to submit the request.
 #' @param add_prefixes Boolean to add PREFIX declarations from `prefixes` to
 #'                     the query.
 #' @param http_params  Additional parameter/value pairs for the HTTP request.
-#' @param use_post     Boolean to use POST instead of GET for the HTTP request.
 #' @param iri_style    One of "long", "short", "html", or "mdlink" to encode
 #'                     returned IRIs.
 #' @param echo         Print the SPARQL query that is executed in the terminal.
@@ -432,9 +474,9 @@ sparql_describe <- function(
   endpoint,
   query,
   prefixes = DEFAULT_PREFIXES,
+  request_method = c("POST", "GET"),
   add_prefixes = FALSE,
   http_params  = list(),
-  use_post = FALSE,
   iri_style = "long",
   echo = FALSE
 ) {
@@ -448,11 +490,11 @@ sparql_describe <- function(
 
   # Run the HTTP request on the SPARQL endpoint.
   start_time <- Sys.time()
-  response <- run_http_request(
+  response <- http_request(
     endpoint,
     http_params,
     mime_type = MIME_TYPE_N_TRIPLE,
-    use_post = use_post
+    request_method = request_method
   )
   message(paste("Query time:", elapsed_time(start_time, end_time = Sys.time())))
 

@@ -8,6 +8,7 @@ elapsed_time <- function(start_time, end_time) {
   sprintf("%02d:%02d:%02d", h, m, s)
 }
 
+
 #' Convert a 2-column tibble into a SPARQL PREFIX multi-line string.
 #'
 #' @param prefixes A tibble with columns "short" and "long", containing
@@ -22,23 +23,12 @@ as_sparql_prefix <- function(prefixes) {
     paste(collapse = "\n")
 }
 
-# Add the specified PREFIXes to a SPARQL query.
-add_prefixes_to_query <- function(query, prefixes) {
-  if (!is.null(prefixes) && nrow(prefixes) > 0) {
-    paste(as_sparql_prefix(prefixes), query, sep = "\n\n")
-  } else {
-    query
-  }
-}
-
 
 # Verify that the `x` list object has the expected structure of a standard
 # SPARQL query response in JSON format.
 is_valid_rdf_term <- function(x) {
   is.list(x) && !is.null(x$type) && !is.null(x$value)
 }
-
-
 
 
 # Read a SPARQL query from a `.rq` file and return it as a multi-line string.
@@ -49,6 +39,7 @@ load_query_from_file <- function(path, remove_comments = FALSE) {
   }
   paste(query, collapse = "\n")
 }
+
 
 # Extract the list of PREFIXes from a SPARQL query file, and return it as
 # a tibble object.
@@ -63,6 +54,7 @@ load_prefixes_from_file <- function(path) {
     dplyr::mutate(long = stringr::str_remove_all(long, "^<|>$")) |>
     dplyr::mutate(short = stringr::str_remove_all(short, ":"))
 }
+
 
 subtractive_mix <- function(hex_colors) {
   if (length(hex_colors) == 0) {
