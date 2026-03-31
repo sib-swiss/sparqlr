@@ -1,4 +1,5 @@
 linters: linters_with_defaults(
     commented_code_linter = NULL,
-    object_name_linter = object_name_linter(styles = c("snake_case", "SNAKE_CASE"))
+    object_name_linter = object_name_linter(styles = c("snake_case", "SNAKE_CASE")),
+    object_length_linter = object_length_linter(length = 35L)
   )
