@@ -1,7 +1,8 @@
 ^LICENSE$
 
-# Ignore lintr config file.
+# Ignore lintr config files.
 ^\.lintr$
+^\.markdownlint\.json$
 
 # Personal test files.
 ^notes.R$
