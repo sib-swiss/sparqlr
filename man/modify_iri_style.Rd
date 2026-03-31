@@ -2,21 +2,30 @@
 % Please edit documentation in R/sparql.R
 \name{modify_iri_style}
 \alias{modify_iri_style}
-\title{Change the style of IRIs from "long" or "short" into another form.}
+\title{Convert the style of IRIs from "long" or "short" into another form.}
 \usage{
-modify_iri_style(t, prefixes, iri_style = c("short", "long", "mdlink", "html"))
+modify_iri_style(
+  t,
+  prefixes,
+  iri_style = c("short", "long", "mdlink", "html"),
+  replace_in_literal = FALSE
+)
 }
 \arguments{
 \item{t}{Tibble whose IRIs are to be modified.}
 
-\item{prefixes}{Tibble with "short" and "long" versions of the prefixes
-for which the IRI style should be modified.}
+\item{prefixes}{Tibble with "short" and "long" versions of the
+prefixes for which the IRI style should be
+modified.}
 
 \item{iri_style}{One of "short", "mdlink", "html" or "long".}
+
+\item{replace_in_literal}{If TRUE, then replacement is also done within
+literal strings, not just in IRIs.}
 }
 \value{
 An copy of the input tibble \code{t} where the IRI style was modified.
 }
 \description{
-Modify the style of IRIs in all columns of a tibble.
+Convert the style of IRIs in all columns of a tibble.
 }

@@ -206,38 +206,46 @@ is_valid_prefix_tibble <- function(t) {
   invisible(TRUE)
 }
 
-#' Change the style of IRIs from "long" or "short" into another form.
+
+#' Create a function to replace IRI styles in strings.
 #'
-#' @description Modify the style of IRIs in all columns of a tibble.
+#' @description Returns a function to replace IRI styles in strings.
 #'
-#' @param t         Tibble whose IRIs are to be modified.
-#' @param prefixes  Tibble with "short" and "long" versions of the prefixes
-#'                  for which the IRI style should be modified.
-#' @param iri_style One of "short", "mdlink", "html" or "long".
+#' @param iri_style          One of "long", "short", "mdlink", or "html".
+#' @param prefixes           Tibble with "short" and "long" prefix columns.
+#' @param replace_in_literal If TRUE, then replacement is also done within
+#'                           literal strings, not just in IRIs.
 #'
-#' @return An copy of the input tibble `t` where the IRI style was modified.
+#' @return A function that replaces IRIs according to the specified style.
 #'
-#' @export
-modify_iri_style <- function(
-  t,
+#' @keywords internal
+iri_replacement_function <- function(
+  iri_style,
   prefixes,
-  iri_style = c("short", "long", "mdlink", "html")
+  replace_in_literal
 ) {
-
-  # Validate user input.
-  iri_style <- match.arg(iri_style)
-  if (is.null(prefixes)) return(t)
-
-  # The input is assumed to already be in "long" form, so if "long" is
-  # requested, there is nothing to change.
+  # "long" forms are not replaced, so we return an identity function.
   if (iri_style == "long") {
-    return(t)
+    return(\(x) x)
   }
 
-  # Change IRIs from "long" to other forms.
   short_forms <- unlist(prefixes$short)
   long_forms <- unlist(prefixes$long)
-  pattern <- paste0("<(", long_forms, ")(\\S+)>")
+
+  # List of pattern to match for a regexp.
+  pattern <- if (replace_in_literal) {
+    # This could possible be written as a single regexp.
+    c(
+      paste0("<(", long_forms, ")(\\S+)>"),
+      paste0("(?:(?<=^)|(?<=\\s))(", long_forms, ")(\\S+)(?:(?=$)|(?=\\s))")
+    )
+  } else {
+    paste0("^<(", long_forms, ")(\\S+)>$")
+  }
+
+  # List of replacement values for the patterns defined above. Each pattern
+  # must have a matching replacement, which is why `replacement` is duplicated
+  # when `replace_in_literal=TRUE`.
   replacement <- switch(
     iri_style,
     "short" = paste0(short_forms, ":\\2"),
@@ -245,20 +253,75 @@ modify_iri_style <- function(
     "html" = paste0('<a href="', long_forms, '\\2">', short_forms, ":\\2</a>"),
     rlang::abort(paste("Unsupported iri_style:", iri_style))
   )
+  if (replace_in_literal) replacement <- c(replacement, replacement)
 
-  # Note: applying the regexp using dplyr is much faster than trying to apply
-  # it when converting individual RDF terms.
-  t |>
-    dplyr::mutate(
-      dplyr::across(
-        dplyr::where(rlang::is_character),
-        function(x) {
-          stringr::str_replace_all(x, stats::setNames(replacement, pattern))
-        }
-      )
-    )
+  # Return string replacement function.
+  \(x) stringr::str_replace_all(x, stats::setNames(replacement, pattern))
 }
 
+
+#' Convert the style of IRIs from "long" or "short" into another form.
+#'
+#' @description Convert the style of IRIs in all columns of a tibble.
+#'
+#' @param t                  Tibble whose IRIs are to be modified.
+#' @param prefixes           Tibble with "short" and "long" versions of the
+#'                           prefixes for which the IRI style should be
+#'                           modified.
+#' @param iri_style          One of "short", "mdlink", "html" or "long".
+#' @param replace_in_literal If TRUE, then replacement is also done within
+#'                           literal strings, not just in IRIs.
+#'
+#' @return An copy of the input tibble `t` where the IRI style was modified.
+#'
+#' @export
+modify_iri_style <- function(
+  t,
+  prefixes,
+  iri_style = c("short", "long", "mdlink", "html"),
+  replace_in_literal = FALSE
+) {
+  # Validate user input.
+  iri_style <- match.arg(iri_style, several.ok = TRUE)
+  if (is.null(prefixes) || nrow(prefixes) == 0) return(t)
+
+  # The input is assumed to already be in "long" form, so if "long" is
+  # requested, there is nothing to change.
+  if (all(iri_style == "long")) return(t)
+
+  # Sort prefix tibble by decreasing length order, so that longer prefixes
+  # are matched (and replaced) before shorter ones.
+  prefixes <- dplyr::arrange(prefixes, dplyr::desc(nchar(.data$long)))
+
+  if (length(iri_style) == 1) {
+    # Case 1: a single IRI style was passed and will be applied to all columns
+    # of the input tibble. This version is kept here as it might be slightly
+    # more performant than using `purrr::map2()`
+    t |>
+      dplyr::mutate(
+        dplyr::across(
+          dplyr::where(rlang::is_character),
+          function(x) {
+            iri_replacement_function(iri_style, prefixes, replace_in_literal)(x)
+          }
+        )
+      )
+  } else {
+    # Case 2: multiple IRI styles were passed by the user, and each gets
+    # applied to a column of the input tibble.
+    purrr::map2(
+      t,
+      # If needed, recycle the provided IRI styles over the number of columns
+      # of the tibble to modify.
+      rep(iri_style, length.out = length(t)),
+      # Function to replace one IRI style with another.
+      function(x, new_style) {
+        iri_replacement_function(new_style, prefixes, replace_in_literal)(x)
+      }
+    ) |>
+      tibble::as_tibble()
+  }
+}
 
 #' Run a SPARQL SELECT query.
 #'
