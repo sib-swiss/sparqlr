@@ -1,0 +1,25 @@
+name: Spelling check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  spelling:
+    runs-on: ubuntu-latest
+    name: Check spelling
+    steps:
+      - uses: actions/checkout@v6
+      
+      - name: Check spelling with cspell
+        uses: streetsidesoftware/cspell-action@v8
+        with:
+          config: .cspell.json
+          files: |
+            **/*.R
+            **/*.Rmd
+            **/*.md
+            DESCRIPTION
+            NAMESPACE

@@ -1,8 +1,12 @@
 ^LICENSE$
+^\.cspell\.json$
 
-# Ignore lintr config files.
+# Ignore lintr config file.
 ^\.lintr$
 ^\.markdownlint\.json$
+
+# Ignore GitHub Actions
+^\.github
 
 # Personal test files.
 ^notes.R$

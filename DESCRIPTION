@@ -19,6 +19,8 @@ Imports:
     tidyr
 Suggests: 
     knitr,
+    lintr,
+    rcmdcheck,
     rmarkdown,
     styler,
     testthat (>= 3.0.0)
