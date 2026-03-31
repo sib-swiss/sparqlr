@@ -1,0 +1,59 @@
+# Use-case step 1.
+#
+# Query the Wikidata SPARQL endpoint to retrieve pollutants from wikidata.
+# Each pollutant is uniquely identified by its CAS registry number (Chemical
+# Abstracts Service).
+#
+# Description of wikidata predicates and objects used in the query:
+#   ?compound  wdt:P31   (is instance)         wd:Q113145171 (chemical substance)
+#              wdt:P232  (ec number)           ?ec_number
+#              wdt:P231  (cas registry number) ?cas_number
+#              wdt:P2240 (median lethal dose)  ?ld50
+#              wdt:P366  (has use)             ?use_type
+#
+# Endpoint: https://query.wikidata.org/sparql
+
+PREFIX p: <http://www.wikidata.org/prop/>
+PREFIX pq: <http://www.wikidata.org/prop/qualifier/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX wd: <http://www.wikidata.org/entity/>
+
+SELECT DISTINCT
+    ?use_type
+    ?use_typeLabel
+    ?compound
+    ?compoundLabel
+    ?ec_number
+    ?cas_number
+    (AVG(?ld50) AS ?avg_ld50)
+WHERE
+{
+    # Note: 'wdt:P2240' and 'ld50' is the toxicity level (median lethal
+    # dose), not many data points have this info (only 9 results in total).
+    ?compound wdt:P31                     wd:Q113145171 ;
+              wdt:P232                    ?ec_number    ;
+              wdt:P231                    ?cas_number   ;
+              wdt:P2240                   ?ld50         ;
+              wdt:P366                    ?use_type     ;
+              p:P2240                     ?ref          .
+    ?use_type wdt:P279*                   wd:Q131656    .
+    ?ref      pq:P636                     wd:Q285166    ;
+              (pq:P689|pq:P2352)/wdt:P279 wd:Q184224    .
+
+    # Helps get the label in your language, if not, then default for all
+    # languages, then en language
+    SERVICE wikibase:label {
+        bd:serviceParam wikibase:language '[AUTO_LANGUAGE],mul,en'.
+    }
+}
+
+GROUP BY
+    ?use_type
+    ?use_typeLabel
+    ?compound
+    ?compoundLabel
+    ?ec_number 
+    ?cas_number
+
+# Rank by toxicity.
+ORDER BY ?avg_ld50
