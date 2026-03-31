@@ -21,5 +21,38 @@ jobs:
             **/*.R
             **/*.Rmd
             **/*.md
+            **/*.yml
             DESCRIPTION
             NAMESPACE
+
+  commitlint:
+    name: Lint commit messages (conventional commits)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          # Fetch the entire commit history of the repo.
+          fetch-depth: 0
+      - name: Install gommitlint
+        run: |
+          VERSION="0.9.5"
+          URL="https://codeberg.org/Itiquette/gommitlint/releases/download/v${VERSION}/gommitlint_${VERSION}_amd64.deb"
+          echo "Install gommitlint ${VERSION}..."
+          curl -L -o gommitlint.deb "$URL"
+          sudo dpkg -i gommitlint.deb || sudo apt-get install -f -y
+        
+        # Notes:
+        # * For regular pushes, the entire commit history is linted, starting
+        #   from the initial commit 27a63d9.
+        # * For pull requests, only the newly added commits are linted.
+        # * Using "--base-branch main" also checks that the branch is ahead
+        #   of main.
+      - name: Run gommitlint
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMMIT_RANGE="--base-branch main"
+          else
+            COMMIT_RANGE="--range 27a63d9c42a89a969133190e3fc0e4ec1ea52a09..HEAD"
+          fi
+          gommitlint validate --exclude-rule signoff $COMMIT_RANGE
