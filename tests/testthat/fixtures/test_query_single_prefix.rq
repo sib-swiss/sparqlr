@@ -1,0 +1,5 @@
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+SELECT ?name
+WHERE {
+  ?name wdt:P106 wd:Q36834 .
+}

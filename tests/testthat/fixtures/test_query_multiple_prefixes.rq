@@ -1,0 +1,19 @@
+# A test SPARQL query with multiple prefixes.
+# * Prefixes are not in alphabetical order, to test that they get sorted
+#   properly.
+# * Some have extra whitespace, to test they get parsed properly.
+
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX   wd:   <http://www.wikidata.org/entity/>
+PREFIX wdt:    <http://www.wikidata.org/prop/direct/>
+
+# This is a comment in the middle
+SELECT ?subject ?predicate ?object
+WHERE {
+  # Another comment inside the query
+  ?subject ?predicate ?object .
+}
+# Final comment
+LIMIT 10

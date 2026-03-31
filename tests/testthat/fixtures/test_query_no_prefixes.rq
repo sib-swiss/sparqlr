@@ -1,0 +1,7 @@
+SELECT ?subject ?predicate ?object
+
+# A comment line.
+WHERE {
+  ?subject ?predicate ?object .
+}
+LIMIT 10
