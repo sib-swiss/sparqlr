@@ -7,8 +7,7 @@
 rdf_term_to_string(value, na_value = NA)
 }
 \arguments{
-\item{value}{must be of type \code{list} with \code{type} and \code{value} fields,
-or \code{NULL}.}
+\item{value}{A list with \code{type} and \code{value} fields, or \code{NULL}.}
 
 \item{na_value}{Value returned when \code{value} is NULL or an empty string.}
 }
