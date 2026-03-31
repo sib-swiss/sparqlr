@@ -1,0 +1,5 @@
+# sparqlr changelog
+
+## sparqlr 0.1.0
+
+* Initial CRAN submission.
