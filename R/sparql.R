@@ -108,7 +108,13 @@ query_result_to_tibble <- function(query_result, na_value = NA) {
 #' @description Modify the style of IRIs in all columns of a tibble.
 #'
 #' @param t         Tibble whose IRIs are to be modified.
+#' @param prefixes  Tibble with "short" and "long" versions of the prefixes
+#'                  for which the IRI style should be modified.
 #' @param iri_style One of "short", "mdlink", "html" or "long".
+#'
+#' @return An copy of the input tibble `t` where the IRI style was modified.
+#' @export
+#'
 modify_iri_style <- function(t, prefixes, iri_style = "short") {
 
   # The input is assumed to already be in "long" form, so if "long" is
@@ -136,11 +142,10 @@ modify_iri_style <- function(t, prefixes, iri_style = "short") {
       dplyr::across(
         dplyr::where(rlang::is_character),
         function(x) {
-          stringi::stri_replace_all_regex(
+          stringr::str_replace_all(
             unlist(x),
             pattern = pattern,
-            replacement = replacement,
-            vectorize_all = FALSE
+            replacement = replacement
           )
         }
       )
@@ -178,20 +183,22 @@ MIME_TYPE_N_TRIPLE <- "application/n-triples"
 #' @param na_value     Value with which to replace empty fields.
 #' @param echo         Boolean value to echo the SPARQL query before execution.
 #'
-#' @returns            A tibble with the query results or NULL if the query
+#' @return             A tibble with the query results or NULL if the query
 #'                     returns nothing.
 #' @seealso            SPARQL_ask() SPARQL_update()
+#' @export
 #'
 #' @examples
-#' \donotrun{
-#' sparql_query(
-#'     'https://query.wikidata.org/sparql', '
-#'     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-#'     SELECT ?message
-#'     WHERE{
-#'         wd:Q131303 rdfs:label ?message
-#'         FILTER( LANG( ?message ) = 'en' )
-#'     }' )
+#' \dontrun{
+#'  sparql_query(
+#'    "https://query.wikidata.org/sparql",
+#'    "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+#'    SELECT ?message
+#'    WHERE{
+#'        wd:Q131303 rdfs:label ?message
+#'        FILTER( LANG( ?message ) = 'en' )
+#'    }"
+#'  )
 #' }
 sparql_query <- function(
   endpoint,
