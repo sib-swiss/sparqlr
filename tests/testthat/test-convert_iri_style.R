@@ -61,7 +61,10 @@ MARKDOWN_LITERALS <- c(
   "[up:U27](http://purl.uniprot.org/core/U27) with a suffix",
   "This [rdfs:S758](http://www.w3.org/2000/01/rdf-schema#S758)",
   "A w3 example: [w3:W15](http://www.w3.org/W15)",
-  "Here is an [rdf:type](http://www.w3.org/1999/02/22-rdf-syntax-ns#type) example"
+  paste0(
+    "Here is an [rdf:type](http://www.w3.org/1999/02/22-rdf-syntax-ns#type) ",
+    "example"
+  )
 )
 
 HTML_LITERALS <- c(
@@ -71,7 +74,10 @@ HTML_LITERALS <- c(
   '<a href="http://purl.uniprot.org/core/U27">up:U27</a> with a suffix',
   'This <a href="http://www.w3.org/2000/01/rdf-schema#S758">rdfs:S758</a>',
   'A w3 example: <a href="http://www.w3.org/W15">w3:W15</a>',
-  'Here is an <a href="http://www.w3.org/1999/02/22-rdf-syntax-ns#type">rdf:type</a> example'
+  paste0(
+    'Here is an <a href="http://www.w3.org/1999/02/22-rdf-syntax-ns#type">',
+    "rdf:type</a> example"
+  )
 )
 
 TEST_INPUT <- tibble::tibble(
@@ -83,7 +89,7 @@ TEST_INPUT <- tibble::tibble(
 
 PREFIXES <- tibble::tibble(
   short = c("up", "w3", "rdf", "rdfs", "wde"),
-  long  = c(
+  long = c(
     "http://purl.uniprot.org/core/",
     "http://www.w3.org/",
     "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
@@ -95,9 +101,11 @@ PREFIXES <- tibble::tibble(
 
 # Helper function for tests.
 check_iri_conversion <- function(iri_style, expected_iris, expected_literals) {
-
   # Test default conversion, which excludes literals.
-  result <- sparqlr::convert_iri_style(TEST_INPUT, PREFIXES, iri_style = iri_style)
+  result <- sparqlr::convert_iri_style(
+    TEST_INPUT, PREFIXES,
+    iri_style = iri_style
+  )
   testthat::expect_identical(result$iri_1, expected_iris)
   testthat::expect_identical(result$iri_2, expected_iris)
   testthat::expect_identical(result$iri_3, expected_iris)
@@ -114,7 +122,6 @@ check_iri_conversion <- function(iri_style, expected_iris, expected_literals) {
   testthat::expect_identical(result$iri_2, expected_iris)
   testthat::expect_identical(result$iri_3, expected_iris)
   testthat::expect_identical(result$literals, expected_literals)
-
 }
 
 test_that("Long IRIs are correctly converted to short form", {
@@ -177,7 +184,6 @@ test_that(
 
 
 test_that("convert_iri_style prioritizes longer prefixes", {
-
   # Longer prefixes should be matched first to avoid partial replacements.
   prefixes <- tibble::tibble(
     short = c("ex", "example"),

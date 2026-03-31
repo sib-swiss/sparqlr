@@ -63,10 +63,12 @@ http_request <- function(
 
   # Otherwise an error is raised.
   response_summary <- paste(
-    utils::capture.output(print(response)), collapse = "\n"
+    utils::capture.output(print(response)),
+    collapse = "\n"
   )
   response_header <- paste(
-    utils::capture.output(print(response$header)), collapse = "\n"
+    utils::capture.output(print(response$header)),
+    collapse = "\n"
   )
   rlang::abort(
     paste0(
@@ -94,8 +96,7 @@ rdf_term_to_string <- function(value, na_value = NA) {
   if (is.null(value) || value$value == "") {
     return(na_value)
   }
-  switch(
-    value$type,
+  switch(value$type,
     "uri" = paste0("<", value$value, ">"),
     "literal" = value$value,
     "bnode" = paste0("_:", sub("^_:", "", value$value)),
@@ -110,7 +111,6 @@ rdf_term_to_string <- function(value, na_value = NA) {
 #'
 #' @keywords internal
 parse_select_response <- function(response) {
-
   # The HTTP response for a SPARQL SELECT query is expected to be in JSON
   # format. This attempts to parse the JSON string into a list.
   # Fallback on HTML if that fails.
@@ -121,9 +121,11 @@ parse_select_response <- function(response) {
 
   # Verify that the parsed response has the expected structure.
   if (
-    !(is.list(parsed_response) &&
+    !(
+      is.list(parsed_response) &&
         all(c("head", "results") %in% names(parsed_response)) &&
-        "bindings" %in% names(parsed_response$results))
+        "bindings" %in% names(parsed_response$results)
+    )
   ) {
     rlang::abort(
       paste0(
@@ -144,7 +146,6 @@ parse_select_response <- function(response) {
 #'
 #' @keywords internal
 parse_construct_response <- function(response) {
-
   # The HTTP response for a SPARQL CONSTRUCT query is expected to be an
   # n-triple string. This attempts to parse the response body to a string.
   # Fallback on HTML if that fails.
@@ -246,8 +247,7 @@ iri_replacement_function <- function(
   # List of replacement values for the patterns defined above. Each pattern
   # must have a matching replacement, which is why `replacement` is duplicated
   # when `replace_in_literal=TRUE`.
-  replacement <- switch(
-    iri_style,
+  replacement <- switch(iri_style,
     "short" = paste0(short_forms, ":\\2"),
     "mdlink" = paste0("[", short_forms, ":\\2](\\1\\2)"),
     "html" = paste0('<a href="', long_forms, '\\2">', short_forms, ":\\2</a>"),
@@ -283,11 +283,15 @@ convert_iri_style <- function(
 ) {
   # Validate user input.
   iri_style <- match.arg(iri_style, several.ok = TRUE)
-  if (is.null(prefixes) || nrow(prefixes) == 0) return(t)
+  if (is.null(prefixes) || nrow(prefixes) == 0) {
+    return(t)
+  }
 
   # The input is assumed to already be in "long" form, so if "long" is
   # requested, there is nothing to change.
-  if (all(iri_style == "long")) return(t)
+  if (all(iri_style == "long")) {
+    return(t)
+  }
 
   # Sort prefix tibble by decreasing length order, so that longer prefixes
   # are matched (and replaced) before shorter ones.
@@ -365,9 +369,11 @@ sparql_select <- function(
     request_method = request_method,
     http_extra_params = http_extra_params
   )
-  if (verbose) message(
-    paste("Query time:", elapsed_time(start_time, end_time = Sys.time()))
-  )
+  if (verbose) {
+    message(
+      paste("Query time:", elapsed_time(start_time, end_time = Sys.time()))
+    )
+  }
 
   # Try to parse the response as JSON. If the query returned no results, exit
   # function.
@@ -427,9 +433,11 @@ sparql_construct <- function(
     request_method = request_method,
     http_extra_params = http_extra_params
   )
-  if (verbose) message(
-    paste("Query time:", elapsed_time(start_time, end_time = Sys.time()))
-  )
+  if (verbose) {
+    message(
+      paste("Query time:", elapsed_time(start_time, end_time = Sys.time()))
+    )
+  }
 
   # Try to parse the response as n-triple strings. If the query returned no
   # results, exit function.
@@ -444,7 +452,7 @@ sparql_construct <- function(
     lapply(get_iri_from_ntriple) |>
     do.call(what = rbind) |>
     dplyr::as_tibble(stringsAsFactors = FALSE) |>
-    dplyr::select("from" = 1,  "to" = 3, "edge" = 2) |>
+    dplyr::select("from" = 1, "to" = 3, "edge" = 2) |>
     convert_iri_style(prefixes, iri_style = "short") |>
     dplyr::arrange(dplyr::across(dplyr::everything()))
 
@@ -452,7 +460,8 @@ sparql_construct <- function(
   # associated with them. The column with node names must be named "id" in
   # order to be easily compatible with visNetwork.
   nodes_with_properties <- query_result[grepl(
-    REGEXP_LITERAL_TRIPLE, query_result, perl = TRUE
+    REGEXP_LITERAL_TRIPLE, query_result,
+    perl = TRUE
   )] |>
     lapply(get_iri_and_literal_from_ntriple) |>
     do.call(what = rbind) |>
@@ -481,8 +490,9 @@ sparql_construct <- function(
   list(
     edges = edges,
     nodes = dplyr::full_join(
-      tibble::tibble(id = union(edges$from, edges$to)),  # List of all nodes.
-      nodes_with_properties, by = "id"
+      tibble::tibble(id = union(edges$from, edges$to)), # List of all nodes.
+      nodes_with_properties,
+      by = "id"
     ) |>
       dplyr::arrange(.data$id)
   )
@@ -529,9 +539,11 @@ sparql_describe <- function(
     request_method = request_method,
     http_extra_params = http_extra_params
   )
-  if (verbose) message(
-    paste("Query time:", elapsed_time(start_time, end_time = Sys.time()))
-  )
+  if (verbose) {
+    message(
+      paste("Query time:", elapsed_time(start_time, end_time = Sys.time()))
+    )
+  }
 
   # Try to parse the response as n-triple strings. If the query returned no
   # results, exit function.
@@ -561,5 +573,4 @@ sparql_ask <- function() {
 
 sparql_count <- function() {
   stop("not yet implemented")
-
 }

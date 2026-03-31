@@ -20,6 +20,7 @@ Imports:
 Suggests: 
     knitr,
     rmarkdown,
+    styler,
     testthat (>= 3.0.0)
 VignetteBuilder: 
     knitr

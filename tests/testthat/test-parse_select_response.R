@@ -1,4 +1,3 @@
-
 test_that(
   "successfully parses a valid SPARQL SELECT response",
   {

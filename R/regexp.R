@@ -1,4 +1,3 @@
-
 REGEXP_IRI <- "<[^>]*>"
 REGEXP_IRI_TRIPLE <- paste0(
   "^", REGEXP_IRI, "\\s*", REGEXP_IRI, "\\s*", REGEXP_IRI, "$"
