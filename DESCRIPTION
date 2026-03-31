@@ -9,6 +9,8 @@ Description: Provides a SPARQL client for R.
 License: GPL-3
 URL: https://github.com/sib-swiss/sparqlr
 BugReports: https://github.com/sib-swiss/sparqlr/issues
+Depends: 
+    R (>= 4.1.0)
 Imports: 
     dplyr,
     httr2,
