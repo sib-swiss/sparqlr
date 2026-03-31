@@ -9,4 +9,5 @@
 ^\.github
 
 # Personal test files.
-^notes.R$
+^notes\.R$
+^cran-comments\.md$
