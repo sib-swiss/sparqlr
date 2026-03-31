@@ -41,3 +41,40 @@ data types.
 In the HTTP request, the "application/sparql-results+json" MIME type is
 used, which is supported by most SPARQL endpoints.
 }
+\examples{
+\dontshow{if (Sys.getenv("_R_SPARQLR_RUN_CONNECTED_EXAMPLES_") == 1) withAutoprint(\{ # examplesIf}
+
+# Define the SPARQL query to run.
+query <- "
+# Query classical music composers and their country of origin.
+SELECT ?composer ?composerLabel ?country ?countryLabel WHERE {
+
+  ?composer wdt:P106 wd:Q36834 ;     # Occupation: composer
+            wdt:P101  wd:Q9730 .     # Field of work: classical music
+
+  OPTIONAL { ?composer wdt:P27 ?country . }  # country of citizenship
+
+  SERVICE wikibase:label {
+    bd:serviceParam wikibase:language '[AUTO_LANGUAGE],en' .
+  }
+}
+"
+
+# Run the SPARQL query on the specified endpoint.
+sparql_select(
+  endpoint = "https://query.wikidata.org/sparql",
+  query = query
+)
+
+# Same as above, but converting prefixes to their short form.
+prefixes <- tibble::tibble(
+  short = c("wde"),
+  long = c("http://www.wikidata.org/entity/")
+)
+sparql_select(
+  endpoint = "https://query.wikidata.org/sparql",
+  query = query,
+  prefixes = prefixes
+)
+\dontshow{\}) # examplesIf}
+}

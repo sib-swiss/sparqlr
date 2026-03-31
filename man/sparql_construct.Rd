@@ -39,3 +39,19 @@ containing two tibbles: one for edges (triples with IRIs) and one for nodes
 with properties.
 IRIs can be formatted in different styles using the \code{iri_style} argument.
 }
+\examples{
+\dontshow{if (Sys.getenv("_R_SPARQLR_RUN_CONNECTED_EXAMPLES_") == 1) withAutoprint(\{ # examplesIf}
+
+# Load a SPARQL construct query from an example file.
+query <- system.file(
+  "extdata", "example_construct.rq",
+  package = "sparqlr"
+) |> load_query_from_file()
+
+# Run the SPARQL query on the specified endpoint.
+sparql_construct(
+  endpoint = "https://query.wikidata.org/sparql",
+  query = query
+)
+\dontshow{\}) # examplesIf}
+}

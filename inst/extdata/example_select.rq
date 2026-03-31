@@ -1,0 +1,15 @@
+# Query classical music composers and their country of origin.
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+
+SELECT ?composer ?composerLabel ?country ?countryLabel WHERE {
+
+  ?composer wdt:P106 wd:Q36834 ;     # Occupation: composer
+            wdt:P101  wd:Q9730 .     # Field of work: classical music
+  
+  OPTIONAL { ?composer wdt:P27 ?country . }  # country of citizenship
+
+  SERVICE wikibase:label { 
+    bd:serviceParam wikibase:language '[AUTO_LANGUAGE],en'. 
+  }
+}

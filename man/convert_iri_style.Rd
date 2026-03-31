@@ -29,3 +29,53 @@ An copy of the input tibble \code{t} where the IRI style was modified.
 \description{
 Convert the style of IRIs in all columns of a tibble.
 }
+\examples{
+# Create a sample tibble with long-form IRIs.
+data <- tibble::tibble(
+  composer = c(
+    "<http://www.wikidata.org/entity/Q254>",
+    "<http://www.wikidata.org/entity/Q255>",
+    "<http://www.wikidata.org/entity/Q1268>"
+  ),
+  country = c(
+    "<http://www.wikidata.org/entity/Q701614>",
+    "<http://www.wikidata.org/entity/Q131964>",
+    "<http://www.wikidata.org/entity/Q34266>"
+  ),
+  label = c(
+    "Wolfgang Amadeus Mozart - http://example.org/Mozart",
+    "Ludwig van Beethoven - http://example.org/Beethoven",
+    "Frederic Chopin - http://example.org/Chopin)"
+  )
+)
+
+# Define prefixes long-to-short correspondence.
+prefixes <- tibble::tibble(
+  short = c("wde", "ex"),
+  long = c("http://www.wikidata.org/entity/", "http://example.org/")
+)
+
+# Convert IRIs to short form.
+convert_iri_style(data, prefixes, iri_style = "short")
+
+# Convert IRIs to markdown link format.
+convert_iri_style(data, prefixes, iri_style = "mdlink")
+
+# Convert IRIs to HTML link format.
+convert_iri_style(data, prefixes, iri_style = "html")
+
+# Also apply conversion to string literals.
+convert_iri_style(
+  data, prefixes,
+  iri_style = "short",
+  replace_in_literal = TRUE
+)
+
+# Apply different IRI styles to different columns.
+convert_iri_style(
+  data, prefixes,
+  iri_style = c("short", "short", "mdlink"),
+  replace_in_literal = TRUE
+)
+
+}

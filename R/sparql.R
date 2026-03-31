@@ -36,6 +36,7 @@ sparql_query <- function(
   )
 }
 
+
 # Run an HTTP request on a SPARQL endpoint.
 http_request <- function(
   endpoint,
@@ -90,6 +91,7 @@ http_request <- function(
 #' @param na_value Value returned when `value` is NULL or an empty string.
 #'
 #' @keywords internal
+#'
 rdf_term_to_string <- function(value, na_value = NA) {
   # This function assumes that the input `value` has the correct structure:
   # a list with "type" and "value" fields.
@@ -110,6 +112,7 @@ rdf_term_to_string <- function(value, na_value = NA) {
 #' @param response SPARQL SELECT HTTP query response.
 #'
 #' @keywords internal
+#'
 parse_select_response <- function(response) {
   # The HTTP response for a SPARQL SELECT query is expected to be in JSON
   # format. This attempts to parse the JSON string into a list.
@@ -145,6 +148,7 @@ parse_select_response <- function(response) {
 #' @param response SPARQL CONSTRUCT HTTP query response.
 #'
 #' @keywords internal
+#'
 parse_construct_response <- function(response) {
   # The HTTP response for a SPARQL CONSTRUCT query is expected to be an
   # n-triple string. This attempts to parse the response body to a string.
@@ -171,6 +175,7 @@ parse_construct_response <- function(response) {
 #' @param na_value      Value with which to replace empty/missing fields.
 #'
 #' @keywords internal
+#'
 query_result_to_tibble <- function(query_result, na_value = NA) {
   # Parse the nested list: for each record (row) returned by the request, check
   # whether some fields (columns) are missing, which indicates a "NA" value.
@@ -190,6 +195,7 @@ query_result_to_tibble <- function(query_result, na_value = NA) {
     # Call the built-in type conversion of R.
     utils::type.convert(na.strings = c(""), as.is = TRUE)
 }
+
 
 # Verify that a PREFIX tibble (or data frame) has the correct structure.
 is_valid_prefix_tibble <- function(t) {
@@ -274,7 +280,57 @@ iri_replacement_function <- function(
 #'
 #' @return An copy of the input tibble `t` where the IRI style was modified.
 #'
+#' @examples
+#' # Create a sample tibble with long-form IRIs.
+#' data <- tibble::tibble(
+#'   composer = c(
+#'     "<http://www.wikidata.org/entity/Q254>",
+#'     "<http://www.wikidata.org/entity/Q255>",
+#'     "<http://www.wikidata.org/entity/Q1268>"
+#'   ),
+#'   country = c(
+#'     "<http://www.wikidata.org/entity/Q701614>",
+#'     "<http://www.wikidata.org/entity/Q131964>",
+#'     "<http://www.wikidata.org/entity/Q34266>"
+#'   ),
+#'   label = c(
+#'     "Wolfgang Amadeus Mozart - http://example.org/Mozart",
+#'     "Ludwig van Beethoven - http://example.org/Beethoven",
+#'     "Frederic Chopin - http://example.org/Chopin)"
+#'   )
+#' )
+#'
+#' # Define prefixes long-to-short correspondence.
+#' prefixes <- tibble::tibble(
+#'   short = c("wde", "ex"),
+#'   long = c("http://www.wikidata.org/entity/", "http://example.org/")
+#' )
+#'
+#' # Convert IRIs to short form.
+#' convert_iri_style(data, prefixes, iri_style = "short")
+#'
+#' # Convert IRIs to markdown link format.
+#' convert_iri_style(data, prefixes, iri_style = "mdlink")
+#'
+#' # Convert IRIs to HTML link format.
+#' convert_iri_style(data, prefixes, iri_style = "html")
+#'
+#' # Also apply conversion to string literals.
+#' convert_iri_style(
+#'   data, prefixes,
+#'   iri_style = "short",
+#'   replace_in_literal = TRUE
+#' )
+#'
+#' # Apply different IRI styles to different columns.
+#' convert_iri_style(
+#'   data, prefixes,
+#'   iri_style = c("short", "short", "mdlink"),
+#'   replace_in_literal = TRUE
+#' )
+#'
 #' @export
+#'
 convert_iri_style <- function(
   t,
   prefixes,
@@ -327,6 +383,7 @@ convert_iri_style <- function(
   }
 }
 
+
 #' Run a SPARQL SELECT query.
 #'
 #' @description Run a SPARQL query, either SELECT, CONSTRUCT or DESCRIBE and
@@ -348,7 +405,44 @@ convert_iri_style <- function(
 #' @param verbose           If `TRUE`, print query execution time.
 #'
 #' @return A tibble with the query results or NULL if the query returns nothing.
+#'
+#' @examplesIf Sys.getenv("_R_SPARQLR_RUN_CONNECTED_EXAMPLES_") == 1
+#'
+#' # Define the SPARQL query to run.
+#' query <- "
+#' # Query classical music composers and their country of origin.
+#' SELECT ?composer ?composerLabel ?country ?countryLabel WHERE {
+#'
+#'   ?composer wdt:P106 wd:Q36834 ;     # Occupation: composer
+#'             wdt:P101  wd:Q9730 .     # Field of work: classical music
+#'
+#'   OPTIONAL { ?composer wdt:P27 ?country . }  # country of citizenship
+#'
+#'   SERVICE wikibase:label {
+#'     bd:serviceParam wikibase:language '[AUTO_LANGUAGE],en' .
+#'   }
+#' }
+#' "
+#'
+#' # Run the SPARQL query on the specified endpoint.
+#' sparql_select(
+#'   endpoint = "https://query.wikidata.org/sparql",
+#'   query = query
+#' )
+#'
+#' # Same as above, but converting prefixes to their short form.
+#' prefixes <- tibble::tibble(
+#'   short = c("wde"),
+#'   long = c("http://www.wikidata.org/entity/")
+#' )
+#' sparql_select(
+#'   endpoint = "https://query.wikidata.org/sparql",
+#'   query = query,
+#'   prefixes = prefixes
+#' )
+#'
 #' @export
+#'
 sparql_select <- function(
   endpoint,
   query,
@@ -411,8 +505,23 @@ sparql_select <- function(
 #'
 #' @return             A list with two tibbles: `edges` and `nodes`.
 #'
+#' @examplesIf Sys.getenv("_R_SPARQLR_RUN_CONNECTED_EXAMPLES_") == 1
+#'
+#' # Load a SPARQL construct query from an example file.
+#' query <- system.file(
+#'   "extdata", "example_construct.rq",
+#'   package = "sparqlr"
+#' ) |> load_query_from_file()
+#'
+#' # Run the SPARQL query on the specified endpoint.
+#' sparql_construct(
+#'   endpoint = "https://query.wikidata.org/sparql",
+#'   query = query
+#' )
+#'
 #' @export
 #' @importFrom rlang .data
+#'
 sparql_construct <- function(
   endpoint,
   query,
@@ -498,6 +607,7 @@ sparql_construct <- function(
   )
 }
 
+
 #' Run a SPARQL DESCRIBE query.
 #'
 #' @description
@@ -518,7 +628,29 @@ sparql_construct <- function(
 #'
 #' @return             A list with two tibbles: `edges` and `nodes`.
 #'
+#' @examplesIf Sys.getenv("_R_SPARQLR_RUN_CONNECTED_EXAMPLES_") == 1
+#'
+#' query <- "
+#' # Retrieve all 'useful descriptions' associated with the 'cats' resource.
+#' DESCRIBE <http://www.wikidata.org/entity/Q146>
+#' "
+#' endpoint <- "https://query.wikidata.org/sparql"
+#'
+#' # Run the SPARQL query on the specified endpoint.
+#' sparql_describe(endpoint, query)
+#'
+#' # Same as above, but converting prefixes to their short form.
+#' prefixes <- tibble::tibble(
+#'   short = c("wd", "w3"),
+#'   long = c(
+#'     "http://www.wikidata.org/entity/",
+#'     "http://www.w3.org/2000/01/rdf-schema#"
+#'   )
+#' )
+#' sparql_describe(endpoint, query, prefixes = prefixes)
+#'
 #' @export
+#'
 sparql_describe <- function(
   endpoint,
   query,

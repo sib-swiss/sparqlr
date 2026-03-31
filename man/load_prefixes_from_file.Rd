@@ -2,15 +2,23 @@
 % Please edit documentation in R/utils.R
 \name{load_prefixes_from_file}
 \alias{load_prefixes_from_file}
-\title{Extract the list of PREFIXes from a SPARQL query file, and return it as
-a tibble object.}
+\title{Load SPARQL prefixes from a text file.}
 \usage{
 load_prefixes_from_file(path)
 }
 \arguments{
-\item{path}{path to SPARQL file.}
+\item{path}{Path (string) of the SPARQL file from which to load prefixes.}
+}
+\value{
+A tibble with \code{short} and \code{long} columns.
 }
 \description{
-Extract the list of PREFIXes from a SPARQL query file, and return it as
+Extracts the list of PREFIXes from a SPARQL query file, and returns it as
 a tibble object.
+}
+\examples{
+# Load a query file
+file_path <- system.file("extdata", "example_select.rq", package = "sparqlr")
+prefixes <- load_prefixes_from_file(file_path)
+
 }

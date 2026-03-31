@@ -11,7 +11,7 @@ elapsed_time <- function(start_time, end_time) {
 }
 
 
-#' Convert a 2-column tibble into a multi-line SPARQL PREFIX string.
+#' Convert a 2-column tibble into a multi-line SPARQL prefix string.
 #'
 #' @param prefixes A tibble with columns "short" and "long", containing
 #'   respectively the short and long forms of SPARQL prefixes.
@@ -41,7 +41,27 @@ n_triples_to_tibble <- function(n_triples) {
 }
 
 
-# Read a SPARQL query from a `.rq` file and return it as a multi-line string.
+#' Load a SPARQL query from a file.
+#'
+#' @description
+#' Reads a SPARQL query from a file and returns it as a single multi-line
+#' string. Optionally removes comment lines (lines starting with a '#'
+#' character).
+#'
+#' @param path             String specifying the path to the SPARQL query file.
+#' @param remove_comments  Boolean. If TRUE, removes lines that start with
+#'                         a comment character '#'. Defaults to FALSE.
+#'
+#' @returns A character string containing the loaded SPARQL query.
+#'
+#' @examples
+#' # Load a query file
+#' file_path <- system.file("extdata", "example_select.rq", package = "sparqlr")
+#' query <- load_query_from_file(file_path, remove_comments = TRUE)
+#' cat(query)
+#'
+#' @export
+#'
 load_query_from_file <- function(path, remove_comments = FALSE) {
   query <- readLines(path)
   if (remove_comments) {
@@ -51,10 +71,22 @@ load_query_from_file <- function(path, remove_comments = FALSE) {
 }
 
 
-#' Extract the list of PREFIXes from a SPARQL query file, and return it as
+#' Load SPARQL prefixes from a text file.
+#'
+#' @description
+#' Extracts the list of PREFIXes from a SPARQL query file, and returns it as
 #' a tibble object.
 #'
-#' @param path path to SPARQL file.
+#' @param path Path (string) of the SPARQL file from which to load prefixes.
+#'
+#' @returns A tibble with `short` and `long` columns.
+#'
+#' @examples
+#' # Load a query file
+#' file_path <- system.file("extdata", "example_select.rq", package = "sparqlr")
+#' prefixes <- load_prefixes_from_file(file_path)
+#'
+#' @export
 #'
 load_prefixes_from_file <- function(path) {
   prefix_regexp <- "^\\s*PREFIX\\s*"
@@ -71,6 +103,15 @@ load_prefixes_from_file <- function(path) {
 }
 
 
+#' Mix colors using subtractive color mixing.
+#'
+#' @description
+#' Combines multiple hex colors using subtractive color mixing, which simulates
+#' how pigments mix in the physical world (e.g., mixing paints). The function
+#' takes the minimum RGB value across all input colors for each channel,
+#' resulting in progressively darker colors as more colors are combined.
+#'
+#' @keywords internal
 subtractive_mix <- function(hex_colors) {
   if (length(hex_colors) == 0) {
     return("#D3D3D3")

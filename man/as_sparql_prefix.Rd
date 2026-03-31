@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{as_sparql_prefix}
 \alias{as_sparql_prefix}
-\title{Convert a 2-column tibble into a multi-line SPARQL PREFIX string.}
+\title{Convert a 2-column tibble into a multi-line SPARQL prefix string.}
 \usage{
 as_sparql_prefix(prefixes)
 }
@@ -11,6 +11,6 @@ as_sparql_prefix(prefixes)
 respectively the short and long forms of SPARQL prefixes.}
 }
 \description{
-Convert a 2-column tibble into a multi-line SPARQL PREFIX string.
+Convert a 2-column tibble into a multi-line SPARQL prefix string.
 }
 \keyword{internal}

@@ -39,3 +39,26 @@ columns: subject, predicate, object.
 
 IRIs can be formatted in different styles using the \code{iri_style} argument.
 }
+\examples{
+\dontshow{if (Sys.getenv("_R_SPARQLR_RUN_CONNECTED_EXAMPLES_") == 1) withAutoprint(\{ # examplesIf}
+
+query <- "
+# Retrieve all 'useful descriptions' associated with the 'cats' resource.
+DESCRIBE <http://www.wikidata.org/entity/Q146>
+"
+endpoint <- "https://query.wikidata.org/sparql"
+
+# Run the SPARQL query on the specified endpoint.
+sparql_describe(endpoint, query)
+
+# Same as above, but converting prefixes to their short form.
+prefixes <- tibble::tibble(
+  short = c("wd", "w3"),
+  long = c(
+    "http://www.wikidata.org/entity/",
+    "http://www.w3.org/2000/01/rdf-schema#"
+  )
+)
+sparql_describe(endpoint, query, prefixes = prefixes)
+\dontshow{\}) # examplesIf}
+}
