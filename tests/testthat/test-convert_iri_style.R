@@ -97,14 +97,14 @@ PREFIXES <- tibble::tibble(
 check_iri_conversion <- function(iri_style, expected_iris, expected_literals) {
 
   # Test default conversion, which excludes literals.
-  result <- sparqlr::modify_iri_style(TEST_INPUT, PREFIXES, iri_style = iri_style)
+  result <- sparqlr::convert_iri_style(TEST_INPUT, PREFIXES, iri_style = iri_style)
   testthat::expect_identical(result$iri_1, expected_iris)
   testthat::expect_identical(result$iri_2, expected_iris)
   testthat::expect_identical(result$iri_3, expected_iris)
   testthat::expect_identical(result$literals, LONG_LITERALS)
 
   # Test that form conversion also works on literals.
-  result <- sparqlr::modify_iri_style(
+  result <- sparqlr::convert_iri_style(
     TEST_INPUT,
     PREFIXES,
     iri_style = iri_style,
@@ -138,7 +138,7 @@ test_that(
   passed for 'iri_style'.",
   {
     # Multiple styles should be applied on a per-column basis.
-    result <- modify_iri_style(
+    result <- convert_iri_style(
       TEST_INPUT,
       PREFIXES,
       iri_style = c("short", "mdlink", "html", "short"),
@@ -150,7 +150,7 @@ test_that(
     expect_identical(result$literals, SHORT_LITERALS)
 
     # Values in iri_style should be re-cycled.
-    result <- modify_iri_style(
+    result <- convert_iri_style(
       TEST_INPUT,
       PREFIXES,
       iri_style = c("short", "mdlink"),
@@ -164,9 +164,9 @@ test_that(
 )
 
 test_that(
-  "modify_iri_style returns unchanged tibble when prefixes is empty",
+  "convert_iri_style returns unchanged tibble when prefixes is empty",
   {
-    result <- modify_iri_style(
+    result <- convert_iri_style(
       TEST_INPUT,
       prefixes = tibble::tibble(short = character(), long = character()),
       iri_style = "short"
@@ -176,7 +176,7 @@ test_that(
 )
 
 
-test_that("modify_iri_style prioritizes longer prefixes", {
+test_that("convert_iri_style prioritizes longer prefixes", {
 
   # Longer prefixes should be matched first to avoid partial replacements.
   prefixes <- tibble::tibble(
@@ -186,7 +186,7 @@ test_that("modify_iri_style prioritizes longer prefixes", {
   input_tibble <- tibble::tibble(
     term = "<http://example.org/ns#term>"
   )
-  result <- modify_iri_style(input_tibble, prefixes, iri_style = "short")
+  result <- convert_iri_style(input_tibble, prefixes, iri_style = "short")
 
   # Should match the longer prefix first.
   expect_equal(result$term, "example:term")

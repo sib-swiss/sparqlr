@@ -275,7 +275,7 @@ iri_replacement_function <- function(
 #' @return An copy of the input tibble `t` where the IRI style was modified.
 #'
 #' @export
-modify_iri_style <- function(
+convert_iri_style <- function(
   t,
   prefixes,
   iri_style = c("short", "long", "mdlink", "html"),
@@ -380,7 +380,7 @@ sparql_select <- function(
   # format requested by the user.
   query_result |>
     query_result_to_tibble() |>
-    modify_iri_style(prefixes, iri_style = "short") |>
+    convert_iri_style(prefixes, iri_style = "short") |>
     dplyr::arrange(dplyr::across(dplyr::everything()))
 }
 
@@ -445,7 +445,7 @@ sparql_construct <- function(
     do.call(what = rbind) |>
     dplyr::as_tibble(stringsAsFactors = FALSE) |>
     dplyr::select("from" = 1,  "to" = 3, "edge" = 2) |>
-    modify_iri_style(prefixes, iri_style = "short") |>
+    convert_iri_style(prefixes, iri_style = "short") |>
     dplyr::arrange(dplyr::across(dplyr::everything()))
 
   # Create a data frame with all nodes that have at least one "property"
@@ -464,7 +464,7 @@ sparql_construct <- function(
         REGEXP_LITERAL_UNQUOTED
       )
     ) |>
-    modify_iri_style(prefixes, iri_style = "short") |>
+    convert_iri_style(prefixes, iri_style = "short") |>
     dplyr::arrange(dplyr::across(dplyr::everything())) |>
     dplyr::group_by(.data$id, .data$edge) |>
     dplyr::summarise(
@@ -543,7 +543,7 @@ sparql_describe <- function(
   # Convert the list of n-triples into a tibble with
   # subject / predicate / object columns.
   n_triples_to_tibble(n_triples = query_result) |>
-    modify_iri_style(prefixes, iri_style = "short")
+    convert_iri_style(prefixes, iri_style = "short")
 }
 
 sparql_update <- function() {
